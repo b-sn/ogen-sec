@@ -1,0 +1,411 @@
+openapi: 3.1.0
+
+info:
+  title: Complete Security Schemes Example
+  version: 1.0.0
+  description: >
+    OpenAPI 3.1 document intended to exercise the security-related
+    parts of an OpenAPI parser or code generator.
+
+servers:
+  - url: https://api.example.com
+
+# Global security requirement.
+# Operations inherit this unless they define their own `security`.
+security:
+  - BearerAuth: []
+
+paths:
+
+  /inherited-security:
+    get:
+      operationId: inheritedSecurity
+      description: Inherits the global BearerAuth requirement.
+      responses:
+        "200":
+          description: OK
+
+  /public:
+    get:
+      operationId: publicEndpoint
+
+      # Overrides the global security requirement.
+      # Authentication is not required.
+      security: []
+
+      responses:
+        "200":
+          description: OK
+
+  /optional-authentication:
+    get:
+      operationId: optionalAuthentication
+
+      # Anonymous OR BearerAuth.
+      security:
+        - {}
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: OK
+
+  /api-key-header:
+    get:
+      operationId: apiKeyHeader
+
+      security:
+        - ApiKeyHeader: []
+
+      responses:
+        "200":
+          description: OK
+
+  /api-key-query:
+    get:
+      operationId: apiKeyQuery
+
+      security:
+        - ApiKeyQuery: []
+
+      responses:
+        "200":
+          description: OK
+
+  /api-key-cookie:
+    get:
+      operationId: apiKeyCookie
+
+      security:
+        - ApiKeyCookie: []
+
+      responses:
+        "200":
+          description: OK
+
+  /api-key-with-role:
+    get:
+      operationId: apiKeyWithRole
+
+      # OpenAPI 3.1 allows role names for non-OAuth security schemes.
+      security:
+        - ApiKeyHeader:
+            - admin
+
+      responses:
+        "200":
+          description: OK
+
+  /basic:
+    get:
+      operationId: basicAuthentication
+
+      security:
+        - BasicAuth: []
+
+      responses:
+        "200":
+          description: OK
+
+  /bearer:
+    get:
+      operationId: bearerAuthentication
+
+      security:
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: OK
+
+  /custom-http:
+    get:
+      operationId: customHttpAuthentication
+
+      security:
+        - CustomHttpAuth: []
+
+      responses:
+        "200":
+          description: OK
+
+  /mutual-tls:
+    get:
+      operationId: mutualTlsAuthentication
+
+      security:
+        - MutualTLS: []
+
+      responses:
+        "200":
+          description: OK
+
+  /oauth2:
+    get:
+      operationId: oauth2Authentication
+
+      security:
+        - OAuth2:
+            - read
+            - write
+
+      responses:
+        "200":
+          description: OK
+
+  /oauth2-without-scopes:
+    get:
+      operationId: oauth2WithoutScopes
+
+      security:
+        - OAuth2: []
+
+      responses:
+        "200":
+          description: OK
+
+  /openid-connect:
+    get:
+      operationId: openIdConnectAuthentication
+
+      security:
+        - OpenIDConnect:
+            - openid
+            - profile
+
+      responses:
+        "200":
+          description: OK
+
+  /or:
+    get:
+      operationId: alternativeAuthentication
+
+      # OR:
+      #
+      # BearerAuth
+      # OR
+      # ApiKeyHeader
+      # OR
+      # MutualTLS
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+        - MutualTLS: []
+
+      responses:
+        "200":
+          description: OK
+
+  /and:
+    get:
+      operationId: combinedAuthentication
+
+      # AND:
+      #
+      # ApiKeyHeader AND MutualTLS
+      security:
+        - ApiKeyHeader: []
+          MutualTLS: []
+
+      responses:
+        "200":
+          description: OK
+
+  /and-or:
+    get:
+      operationId: complexAuthentication
+
+      # (ApiKeyHeader AND OAuth2[read])
+      # OR
+      # (BearerAuth AND MutualTLS)
+      # OR
+      # OpenIDConnect[openid]
+      security:
+        - ApiKeyHeader: []
+          OAuth2:
+            - read
+
+        - BearerAuth: []
+          MutualTLS: []
+
+        - OpenIDConnect:
+            - openid
+
+      responses:
+        "200":
+          description: OK
+
+  /referenced-security-scheme:
+    get:
+      operationId: referencedSecurityScheme
+
+      security:
+        - ReferencedBearerAuth: []
+
+      responses:
+        "200":
+          description: OK
+
+
+components:
+
+  securitySchemes:
+
+    # ------------------------------------------------------------------
+    # type: apiKey
+    # ------------------------------------------------------------------
+
+    # apiKey.in = header
+    ApiKeyHeader:
+      type: apiKey
+      description: API key passed through an HTTP header.
+      name: X-API-Key
+      in: header
+
+    # apiKey.in = query
+    ApiKeyQuery:
+      type: apiKey
+      description: API key passed through a query parameter.
+      name: api_key
+      in: query
+
+    # apiKey.in = cookie
+    ApiKeyCookie:
+      type: apiKey
+      description: API key passed through a cookie.
+      name: api_key
+      in: cookie
+
+
+    # ------------------------------------------------------------------
+    # type: http
+    # ------------------------------------------------------------------
+
+    BasicAuth:
+      type: http
+      description: HTTP Basic authentication.
+      scheme: basic
+
+    BearerAuth:
+      type: http
+      description: HTTP Bearer authentication using JWT.
+      scheme: bearer
+
+      # bearerFormat is only a documentation hint.
+      bearerFormat: JWT
+
+    # `scheme` itself is NOT a closed OpenAPI enum.
+    # It identifies an HTTP Authentication Scheme.
+    CustomHttpAuth:
+      type: http
+      description: Example of another HTTP authentication scheme.
+      scheme: digest
+
+
+    # ------------------------------------------------------------------
+    # type: mutualTLS
+    # ------------------------------------------------------------------
+
+    MutualTLS:
+      type: mutualTLS
+      description: >
+        Client certificate authentication using mutual TLS.
+
+
+    # ------------------------------------------------------------------
+    # type: oauth2
+    #
+    # All four OAuth 2.0 flows are present.
+    # ------------------------------------------------------------------
+
+    OAuth2:
+      type: oauth2
+      description: OAuth 2.0 supporting all flows defined by OpenAPI.
+
+      flows:
+
+        # --------------------------------------------------------------
+        # implicit
+        # --------------------------------------------------------------
+
+        implicit:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+
+
+        # --------------------------------------------------------------
+        # password
+        # --------------------------------------------------------------
+
+        password:
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+
+
+        # --------------------------------------------------------------
+        # clientCredentials
+        # --------------------------------------------------------------
+
+        clientCredentials:
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+
+
+        # --------------------------------------------------------------
+        # authorizationCode
+        # --------------------------------------------------------------
+
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+
+
+    # ------------------------------------------------------------------
+    # type: openIdConnect
+    # ------------------------------------------------------------------
+
+    OpenIDConnect:
+      type: openIdConnect
+
+      description: OpenID Connect authentication.
+
+      openIdConnectUrl: >
+        https://auth.example.com/.well-known/openid-configuration
+
+
+    # ------------------------------------------------------------------
+    # Reference Object instead of an inline Security Scheme Object.
+    #
+    # components.securitySchemes values may be either
+    # Security Scheme Objects or Reference Objects.
+    # ------------------------------------------------------------------
+
+    ReferencedBearerAuth:
+      $ref: "#/components/securitySchemes/BearerAuth"
