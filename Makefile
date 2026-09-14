@@ -1,3 +1,10 @@
+SHELL := /bin/bash
+NVM_DIR := $(HOME)/.nvm
+
+export NO_UPDATE_NOTIFIER := 1
+
+.ONESHELL:
+
 .PHONY: ogen-deps ogen-run spectral-deps spectral-run
 
 ogen-deps:
@@ -10,14 +17,17 @@ ogen-run:
 
 spectral-deps:
 	@echo "Installing spectral dependencies..."
-	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
-	export NVM_DIR="$HOME/.nvm"
-	[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-	[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-	nvm install node && nvm use node
+	if [ ! -s "$(NVM_DIR)/nvm.sh" ]; then
+		curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
+	fi
+	source "$(NVM_DIR)/nvm.sh"
+	nvm install
+	nvm use
 	npm install -g npm
-	npm install -g @stoplight/spectral-cli
+	npm install --save-dev @stoplight/spectral-cli
 
 spectral-run:
 	@echo "Running spectral..."
-	spectral lint ./schema/openapi.yaml --ruleset ./schema/spectral.yaml  --verbose
+	source "$(NVM_DIR)/nvm.sh"
+	nvm use
+	npx spectral lint ./schema/openapi.yaml --ruleset ./schema/spectral.yaml --verbose
