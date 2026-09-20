@@ -1,0 +1,98 @@
+// BasicAuthStore finds a user within a scheme's namespace by username.
+// scheme is the Go credential type name. Implementations must return
+// ErrInvalidBasicAuth for an unknown user and be safe for concurrent use.
+// Plaintext passwords are never passed to the store.
+type BasicAuthStore interface {
+	LookupBasicAuth(ctx {{.context}}.Context, scheme, username string) (BasicAuthRecord, error)
+}
+
+// BasicAuthRecord describes a user and their encoded password hash.
+// PasswordHash includes the algorithm, salt and cost parameters required by
+// PasswordVerifier. A zero ExpiresAt means no expiration.
+type BasicAuthRecord struct {
+	PasswordHash string
+	Subject      string
+	Roles        []string
+	Disabled     bool
+	ExpiresAt    {{.time}}.Time
+}
+
+// PasswordVerifier verifies an encoded password hash, for example Argon2id or bcrypt.
+// Return (false, nil) for a mismatch, and an error for verification failures.
+// For an empty passwordHash, perform a dummy verification with the same cost
+// as a normal password check, then return (false, nil). This is used for unknown
+// users. Implementations must be safe for concurrent use and never log passwords.
+type PasswordVerifier interface {
+	VerifyPassword(ctx {{.context}}.Context, passwordHash, password string) (bool, error)
+}
+
+var (
+	ErrInvalidBasicAuth = {{.errors}}.New("invalid basic auth credentials")
+	ErrBasicAuthForbidden = {{.errors}}.New("insufficient basic auth roles")
+	ErrBasicAuthStoreNotConfigured = {{.errors}}.New("basic auth store is not configured")
+	ErrPasswordVerifierNotConfigured = {{.errors}}.New("password verifier is not configured")
+)
+
+// BasicAuthIdentity contains verified user information, without credentials.
+type BasicAuthIdentity struct {
+	Subject  string
+	Username string
+	Roles    []string
+}
+
+type basicAuthContextKey struct { scheme string }
+
+// BasicAuthIdentityFromContext returns the user authenticated for a scheme.
+func BasicAuthIdentityFromContext(ctx {{.context}}.Context, scheme string) (BasicAuthIdentity, bool) {
+	identity, ok := ctx.Value(basicAuthContextKey{scheme: scheme}).(BasicAuthIdentity)
+	identity.Roles = {{.slices}}.Clone(identity.Roles)
+	return identity, ok
+}
+
+func (s *{{.Type}}) authorizeBasicAuth(ctx {{.context}}.Context, scheme, username, password string, requiredRoles []string) ({{.context}}.Context, error) {
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if username == "" || password == "" {
+		return ctx, ErrInvalidBasicAuth
+	}
+	if s.basicAuth == nil {
+		return ctx, ErrBasicAuthStoreNotConfigured
+	}
+	if s.passwords == nil {
+		return ctx, ErrPasswordVerifierNotConfigured
+	}
+	record, err := s.basicAuth.LookupBasicAuth(ctx, scheme, username)
+	if err != nil {
+		if !{{.errors}}.Is(err, ErrInvalidBasicAuth) {
+			return ctx, {{.fmt}}.Errorf("lookup basic auth user: %w", err)
+		}
+		// Discard any record returned with an unknown-user error. The empty hash
+		// requests a dummy password check and cannot authorize the request.
+		record = BasicAuthRecord{}
+	}
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	valid, err := s.passwords.VerifyPassword(ctx, record.PasswordHash, password)
+	if err != nil {
+		return ctx, {{.fmt}}.Errorf("verify basic auth password: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if !valid || record.PasswordHash == "" || record.Disabled {
+		return ctx, ErrInvalidBasicAuth
+	}
+	if !record.ExpiresAt.IsZero() && !{{.time}}.Now().Before(record.ExpiresAt) {
+		return ctx, ErrInvalidBasicAuth
+	}
+	for _, role := range requiredRoles {
+		if !{{.slices}}.Contains(record.Roles, role) {
+			return ctx, ErrBasicAuthForbidden
+		}
+	}
+	identity := BasicAuthIdentity{Subject: record.Subject, Username: username, Roles: {{.slices}}.Clone(record.Roles)}
+	return {{.context}}.WithValue(ctx, basicAuthContextKey{scheme: scheme}, identity), nil
+}
+

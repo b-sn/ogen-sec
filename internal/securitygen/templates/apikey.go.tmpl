@@ -1,0 +1,69 @@
+// APIKeyStore finds credentials within a scheme's namespace using a SHA-256 digest.
+// scheme is the Go credential type name, for example ApiKeyHeaderA3nKs.
+// Implementations must return ErrInvalidAPIKey for an unknown key and must be
+// safe for concurrent use. The raw key is never passed to the store.
+type APIKeyStore interface {
+	LookupAPIKey(ctx {{.context}}.Context, scheme string, hash [{{.sha256}}.Size]byte) (APIKeyRecord, error)
+}
+
+// APIKeyRecord describes a randomly generated, high-entropy API key.
+// Hash is SHA-256 of the original key. A zero ExpiresAt means no expiration.
+type APIKeyRecord struct {
+	Hash      [{{.sha256}}.Size]byte
+	Subject   string
+	Roles     []string
+	ExpiresAt {{.time}}.Time
+	Revoked   bool
+}
+
+var (
+	ErrInvalidAPIKey = {{.errors}}.New("invalid API key")
+	ErrAPIKeyForbidden = {{.errors}}.New("insufficient API key roles")
+	ErrAPIKeyStoreNotConfigured = {{.errors}}.New("API key store is not configured")
+)
+
+// APIKeyIdentity contains verified identity information, without credentials.
+type APIKeyIdentity struct {
+	Subject string
+	Roles []string
+}
+
+type apiKeyContextKey struct { scheme string }
+
+// APIKeyIdentityFromContext returns the identity authenticated for a scheme.
+// Identities for other schemes are preserved when several API keys are required.
+func APIKeyIdentityFromContext(ctx {{.context}}.Context, scheme string) (APIKeyIdentity, bool) {
+	identity, ok := ctx.Value(apiKeyContextKey{scheme: scheme}).(APIKeyIdentity)
+	identity.Roles = {{.slices}}.Clone(identity.Roles)
+	return identity, ok
+}
+
+func (s *{{.Type}}) authorizeAPIKey(ctx {{.context}}.Context, scheme, key string, requiredRoles []string) ({{.context}}.Context, error) {
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if key == "" {
+		return ctx, ErrInvalidAPIKey
+	}
+	if s.apiKeys == nil {
+		return ctx, ErrAPIKeyStoreNotConfigured
+	}
+	hash := {{.sha256}}.Sum256([]byte(key))
+	record, err := s.apiKeys.LookupAPIKey(ctx, scheme, hash)
+	if err != nil {
+		return ctx, {{.fmt}}.Errorf("lookup API key: %w", err)
+	}
+	if {{.subtle}}.ConstantTimeCompare(hash[:], record.Hash[:]) != 1 || record.Revoked {
+		return ctx, ErrInvalidAPIKey
+	}
+	if !record.ExpiresAt.IsZero() && !{{.time}}.Now().Before(record.ExpiresAt) {
+		return ctx, ErrInvalidAPIKey
+	}
+	for _, role := range requiredRoles {
+		if !{{.slices}}.Contains(record.Roles, role) {
+			return ctx, ErrAPIKeyForbidden
+		}
+	}
+	identity := APIKeyIdentity{Subject: record.Subject, Roles: {{.slices}}.Clone(record.Roles)}
+	return {{.context}}.WithValue(ctx, apiKeyContextKey{scheme: scheme}, identity), nil
+}
