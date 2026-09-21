@@ -1,0 +1,18 @@
+openapi: 3.0.3
+info:
+  title: Bearer authentication fixture
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      security:
+        - WidgetBearer: []
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    WidgetBearer:
+      type: http
+      scheme: bearer

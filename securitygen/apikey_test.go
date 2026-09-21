@@ -126,7 +126,7 @@ func runGeneratedFixture(t *testing.T, fixtureName string) {
 	if err := os.Mkdir(apiDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeTestFile(t, filepath.Join(dir, "go.mod"), []byte("module example.test/generated\n\ngo 1.23.0\n"))
+	writeTestFile(t, filepath.Join(dir, "go.mod"), []byte("module example.test/generated\n\ngo "+testModuleGoVersion+"\n"))
 	for fixture, target := range map[string]string{
 		"interface.go":    filepath.Join(apiDir, "oas_security_gen.go"),
 		"models.go":       filepath.Join(apiDir, "oas_schemas_gen.go"),

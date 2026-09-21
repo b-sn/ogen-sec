@@ -1,0 +1,23 @@
+openapi: 3.0.3
+info:
+  title: OAuth2 fixture
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      security:
+        - WidgetOAuth:
+            - widgets:read
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    WidgetOAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.test/token
+          scopes:
+            widgets:read: Read widgets

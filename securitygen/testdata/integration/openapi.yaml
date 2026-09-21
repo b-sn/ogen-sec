@@ -1,0 +1,469 @@
+openapi: 3.1.0
+
+info:
+  title: Complete Security Schemes Example
+  version: 1.0.0
+  description: >
+    OpenAPI 3.1 document intended to exercise the security-related
+    parts of an OpenAPI parser or code generator.
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: https://api.example.com
+
+# Global security requirement.
+# Operations inherit this unless they define their own `security`.
+security:
+  - BearerAuthV6qPt: []
+
+tags:
+  - name: securityQ7mXp
+    description: Examples of security scheme usage and composition.
+
+paths:
+
+  /inherited-securitya8k2z:
+    get:
+      operationId: inheritedSecurityF3vNx
+      tags: [securityQ7mXp]
+      description: Inherits the global BearerAuth requirement.
+      responses:
+        "200":
+          description: BearerAuth-protected request completed successfully.
+
+  /publicm4vrb:
+    get:
+      operationId: publicEndpointR8kWd
+      tags: [securityQ7mXp]
+      description: Public endpoint that overrides the global security requirement.
+
+      # Overrides the global security requirement.
+      # Authentication is not required.
+      security: []
+
+      responses:
+        "200":
+          description: Public request completed successfully without authentication.
+
+  /optional-authenticationp9tql:
+    get:
+      operationId: optionalAuthenticationC2yHs
+      tags: [securityQ7mXp]
+      description: Allows either anonymous access or BearerAuth authentication.
+
+      # Anonymous OR BearerAuth.
+      security:
+        - {}
+        - BearerAuthV6qPt: []
+
+      responses:
+        "200":
+          description: Request completed successfully with optional authentication.
+
+  /api-key-headerx3nws:
+    get:
+      operationId: apiKeyHeaderL5mQa
+      tags: [securityQ7mXp]
+      description: Requires an API key passed through the request header.
+
+      security:
+        - ApiKeyHeaderA3nKs: []
+
+      responses:
+        "200":
+          description: API-key header authentication succeeded.
+
+  /api-key-queryc6jfa:
+    get:
+      operationId: apiKeyQueryW7pEr
+      tags: [securityQ7mXp]
+      description: Requires an API key passed through a query parameter.
+
+      security:
+        - ApiKeyQueryC8rVw: []
+
+      responses:
+        "200":
+          description: API-key query authentication succeeded.
+
+  /api-key-cookieh8ryu:
+    get:
+      operationId: apiKeyCookieD4tZu
+      tags: [securityQ7mXp]
+      description: Requires an API key passed through a cookie.
+
+      security:
+        - ApiKeyCookieM2xJf: []
+
+      responses:
+        "200":
+          description: API-key cookie authentication succeeded.
+
+  /api-key-with-rolek2vdp:
+    get:
+      operationId: apiKeyWithRoleP9bLc
+      tags: [securityQ7mXp]
+      description: Requires an API key accompanied by the admin role requirement.
+
+      # OpenAPI 3.1 allows role names for non-OAuth security schemes.
+      security:
+        - ApiKeyHeaderA3nKs:
+            - adminB2vXc
+
+      responses:
+        "200":
+          description: API-key authentication with the admin role succeeded.
+
+  /basicn5sge:
+    get:
+      operationId: basicAuthenticationE6qRt
+      tags: [securityQ7mXp]
+      description: Requires HTTP Basic authentication.
+
+      security:
+        - BasicAuthF5wJz: []
+
+      responses:
+        "200":
+          description: HTTP Basic authentication succeeded.
+
+  /bearerw7cqm:
+    get:
+      operationId: bearerAuthenticationT3nVk
+      tags: [securityQ7mXp]
+      description: Requires HTTP Bearer authentication.
+
+      security:
+        - BearerAuthV6qPt: []
+
+      responses:
+        "200":
+          description: HTTP Bearer authentication succeeded.
+
+  /custom-httpb4xlt:
+    get:
+      operationId: customHttpAuthenticationH8mYs
+      tags: [securityQ7mXp]
+      description: Requires a custom HTTP authentication scheme.
+
+      security:
+        - CustomHttpAuthQ7dMe: []
+
+      responses:
+        "200":
+          description: Custom HTTP authentication succeeded.
+
+  /mutual-tlsj9rke:
+    get:
+      operationId: mutualTlsAuthenticationK4pBx
+      tags: [securityQ7mXp]
+      description: Requires mutual TLS client certificate authentication.
+
+      security:
+        - MutualTLSJ9sRa: []
+
+      responses:
+        "200":
+          description: Mutual TLS client certificate authentication succeeded.
+
+  /oauth2z6pua:
+    get:
+      operationId: oauth2AuthenticationM2cFw
+      tags: [securityQ7mXp]
+      description: Requires OAuth 2.0 authentication with read and write scopes.
+
+      security:
+        - OAuth2N4kXb:
+            - readK4mZq
+            - writeH7pLs
+
+      responses:
+        "200":
+          description: OAuth 2.0 authentication with read and write scopes succeeded.
+
+  /oauth2-without-scopesd3wnf:
+    get:
+      operationId: oauth2WithoutScopesB7vQe
+      tags: [securityQ7mXp]
+      description: Requires OAuth 2.0 authentication without specific scopes.
+
+      security:
+        - OAuth2N4kXb: []
+
+      responses:
+        "200":
+          description: OAuth 2.0 authentication without scopes succeeded.
+
+  /openid-connecty8hsb:
+    get:
+      operationId: openIdConnectAuthenticationS5jLu
+      tags: [securityQ7mXp]
+      description: Requires OpenID Connect authentication with openid and profile scopes.
+
+      security:
+        - OpenIDConnectR3tWc:
+            - openidC5tYa
+            - profileJ3kUf
+
+      responses:
+        "200":
+          description: OpenID Connect authentication with openid and profile scopes succeeded.
+
+  /orq5lzc:
+    get:
+      operationId: alternativeAuthenticationV8xNp
+      tags: [securityQ7mXp]
+      description: Accepts any of the listed alternative authentication mechanisms.
+
+      # OR:
+      #
+      # BearerAuth
+      # OR
+      # ApiKeyHeader
+      # OR
+      # MutualTLS
+      security:
+        - BearerAuthV6qPt: []
+        - ApiKeyHeaderA3nKs: []
+        - MutualTLSJ9sRa: []
+
+      responses:
+        "200":
+          description: One of the alternative authentication mechanisms succeeded.
+
+  # Keep the original AND requirement as documentation. ogen v1.24.0 skips
+  # mutualTLS security, but then emits an invalid zero-length security bitset
+  # for an operation that combines it with a supported scheme.
+  # /andt2mvx:
+  #   get:
+  #     operationId: combinedAuthenticationA6rDh
+  #     tags: [securityQ7mXp]
+  #     description: Requires both the API key header and mutual TLS authentication.
+  #
+  #     # ApiKeyHeader AND MutualTLS
+  #     security:
+  #       - ApiKeyHeaderA3nKs: []
+  #         MutualTLSJ9sRa: []
+  #
+  #     responses:
+  #       "200":
+  #         description: Combined API-key and mutual TLS authentication succeeded.
+
+  /api-key-and-oauth2h5jkd:
+    get:
+      operationId: apiKeyAndOAuth2AuthenticationD4rXu
+      tags: [securityQ7mXp]
+      description: Requires both the API key header and OAuth2 authentication.
+
+      # AND: ApiKeyHeader AND OAuth2[read]
+      security:
+        - ApiKeyHeaderA3nKs: []
+          OAuth2N4kXb:
+            - readK4mZq
+
+      responses:
+        "200":
+          description: Combined API-key and OAuth2 authentication succeeded.
+
+  /and-orf7kpd:
+    get:
+      operationId: complexAuthenticationG9wTc
+      tags: [securityQ7mXp]
+      description: Accepts one of the documented combined authentication alternatives.
+
+      # (ApiKeyHeader AND OAuth2[read])
+      # OR
+      # (BearerAuth AND MutualTLS)
+      # OR
+      # OpenIDConnect[openid]
+      security:
+        - ApiKeyHeaderA3nKs: []
+          OAuth2N4kXb:
+            - readK4mZq
+
+        - BearerAuthV6qPt: []
+          MutualTLSJ9sRa: []
+
+        - OpenIDConnectR3tWc:
+            - openidC5tYa
+
+      responses:
+        "200":
+          description: One of the combined authentication alternatives succeeded.
+
+  /referenced-security-schemer4cnj:
+    get:
+      operationId: referencedSecuritySchemeU2kMf
+      tags: [securityQ7mXp]
+      description: Requires a referenced bearer authentication security scheme.
+
+      security:
+        - ReferencedBearerAuthZ8yHd: []
+
+      responses:
+        "200":
+          description: Referenced Bearer authentication succeeded.
+
+
+components:
+
+  securitySchemes:
+
+    # ------------------------------------------------------------------
+    # type: apiKey
+    # ------------------------------------------------------------------
+
+    # apiKey.in = header
+    ApiKeyHeaderA3nKs:
+      type: apiKey
+      description: API key passed through an HTTP header.
+      name: X-Api-Key-L7nqe
+      in: header
+
+    # apiKey.in = query
+    ApiKeyQueryC8rVw:
+      type: apiKey
+      description: API key passed through a query parameter.
+      name: api_key_r4xmv
+      in: query
+
+    # apiKey.in = cookie
+    ApiKeyCookieM2xJf:
+      type: apiKey
+      description: API key passed through a cookie.
+      name: api_key_t9pds
+      in: cookie
+
+
+    # ------------------------------------------------------------------
+    # type: http
+    # ------------------------------------------------------------------
+
+    BasicAuthF5wJz:
+      type: http
+      description: HTTP Basic authentication.
+      scheme: basic
+
+    BearerAuthV6qPt:
+      type: http
+      description: HTTP Bearer authentication using JWT.
+      scheme: bearer
+
+      # bearerFormat is only a documentation hint.
+      bearerFormat: JWT
+
+    # `scheme` itself is NOT a closed OpenAPI enum.
+    # It identifies an HTTP Authentication Scheme.
+    CustomHttpAuthQ7dMe:
+      type: http
+      description: Example of another HTTP authentication scheme.
+      scheme: digest
+
+
+    # ------------------------------------------------------------------
+    # type: mutualTLS
+    # ------------------------------------------------------------------
+
+    MutualTLSJ9sRa:
+      type: mutualTLS
+      description: >
+        Client certificate authentication using mutual TLS.
+
+
+    # ------------------------------------------------------------------
+    # type: oauth2
+    #
+    # All four OAuth 2.0 flows are present.
+    # ------------------------------------------------------------------
+
+    OAuth2N4kXb:
+      type: oauth2
+      description: OAuth 2.0 supporting all flows defined by OpenAPI.
+
+      flows:
+
+        # --------------------------------------------------------------
+        # implicit
+        # --------------------------------------------------------------
+
+        implicit:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            readK4mZq: Read access
+            writeH7pLs: Write access
+            adminN8dRw: Administrative access
+
+
+        # --------------------------------------------------------------
+        # password
+        # --------------------------------------------------------------
+
+        password:
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            readK4mZq: Read access
+            writeH7pLs: Write access
+            adminN8dRw: Administrative access
+
+
+        # --------------------------------------------------------------
+        # clientCredentials
+        # --------------------------------------------------------------
+
+        clientCredentials:
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            readK4mZq: Read access
+            writeH7pLs: Write access
+            adminN8dRw: Administrative access
+
+
+        # --------------------------------------------------------------
+        # authorizationCode
+        # --------------------------------------------------------------
+
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+
+          tokenUrl: https://auth.example.com/oauth/token
+
+          refreshUrl: https://auth.example.com/oauth/refresh
+
+          scopes:
+            readK4mZq: Read access
+            writeH7pLs: Write access
+            adminN8dRw: Administrative access
+
+
+    # ------------------------------------------------------------------
+    # type: openIdConnect
+    # ------------------------------------------------------------------
+
+    OpenIDConnectR3tWc:
+      type: openIdConnect
+
+      description: OpenID Connect authentication.
+
+      openIdConnectUrl: https://auth.example.com/.well-known/openid-configuration
+
+
+    # ------------------------------------------------------------------
+    # Reference Object instead of an inline Security Scheme Object.
+    #
+    # components.securitySchemes values may be either
+    # Security Scheme Objects or Reference Objects.
+    # ------------------------------------------------------------------
+
+    ReferencedBearerAuthZ8yHd:
+      $ref: "#/components/securitySchemes/BearerAuthV6qPt"

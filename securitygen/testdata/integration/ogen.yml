@@ -1,0 +1,8 @@
+# The fixture deliberately contains mutual TLS to verify that unsupported
+# schemes do not turn into securitygen dependencies. ogen does not generate
+# mutual TLS handlers, so it must explicitly skip those operations.
+generator:
+  ignore_not_implemented:
+    - mutualTLS security
+    - openIdConnect security
+    - http security scheme

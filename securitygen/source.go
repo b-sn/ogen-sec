@@ -163,7 +163,7 @@ func detectSecurityMethod(signature *ast.FuncType, declarations map[string]ast.E
 	default:
 		kind, description = basicAuthKind, "Basic auth"
 		if !isIdent(usernameType, "string") || !isIdent(passwordType, "string") {
-			return nil, fmt.Errorf("Basic auth credential %s must have Username and Password string fields", scheme)
+			return nil, fmt.Errorf("basic auth credential %s must have Username and Password string fields", scheme)
 		}
 	}
 	roles, hasRoles := fields["Roles"]

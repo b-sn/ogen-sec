@@ -13,6 +13,8 @@ import (
 	"testing"
 )
 
+const testModuleGoVersion = "1.25"
+
 func TestGenerateImplementsInterface(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: API key fixture
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      security:
+        - WidgetKey: [admin]
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    WidgetKey:
+      type: apiKey
+      name: X-Widget-Key
+      in: header
