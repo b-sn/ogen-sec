@@ -12,3 +12,8 @@ type LegacyCredential struct{ Username, Password string }
 type AliasCredential = LoginCredential
 type PointerCredential struct{ Username, Password string }
 type KeyCredential struct{ APIKey string }
+type BearerCredential struct{ Token string }
+type OAuthCredential struct {
+	Token  string
+	Scopes []string
+}

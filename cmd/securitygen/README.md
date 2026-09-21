@@ -9,26 +9,29 @@ go generate ./internal/security
 The directive lives in `internal/security/generate.go`. The generator reads
 `SecurityHandler` from `internal/ogen/api/oas_security_gen.go` and completely
 replaces `internal/security/security.go` with a struct, a constructor, a
-compile-time interface assertion, and all required methods. API key and Basic auth
-methods have shared authentication and authorization implementations. Other schemes currently
-contain `panic("<method name>: not implemented")`.
+compile-time interface assertion, and all required methods. API key, Basic auth,
+HTTP Bearer, and OAuth2 methods have shared authentication and authorization
+implementations. All methods in the project's current `SecurityHandler` are
+supported. Unrecognized credential types still produce
+`panic("<method name>: not implemented")` stubs.
 
 The existing constructor name, `NewPassthroughSecurityHandler`, is preserved for
 compatibility with the application. Its dependencies and support types are
-generated only for schemes present in the interface:
+generated only for schemes present in the interface, in this order:
 
-| Supported schemes present | Constructor arguments |
+| Scheme present | Constructor arguments added |
 | --- | --- |
-| None | No arguments |
-| API key only | `apiKeys APIKeyStore` |
-| Basic auth only | `basicAuth BasicAuthStore, passwords PasswordVerifier` |
-| Both | `apiKeys APIKeyStore, basicAuth BasicAuthStore, passwords PasswordVerifier` |
+| API key | `apiKeys APIKeyStore` |
+| Basic auth | `basicAuth BasicAuthStore, passwords PasswordVerifier` |
+| HTTP Bearer | `bearerTokens BearerTokenVerifier` |
+| OAuth2 | `oauth2Tokens OAuth2TokenVerifier` |
 
 Multiple methods using the same kind of authentication share these dependencies.
-Their order is stable regardless of method order. For the current project schema:
+Their order is stable regardless of method order. Without supported schemes the
+constructor takes no arguments. For the current project schema:
 
 ```go
-handler := security.NewPassthroughSecurityHandler(apiKeys, basicAuth, passwords)
+handler := security.NewPassthroughSecurityHandler(apiKeys, basicAuth, passwords, bearerTokens, oauth2Tokens)
 ```
 
 Any manual changes to the output file are lost on the next generation run.
@@ -155,6 +158,146 @@ currently passes nil dependencies, so Basic auth requests are rejected until
 real implementations are configured. Use HTTPS and request rate limiting in the
 HTTP/deployment layer; these are outside the generated handler's scope.
 
+## HTTP Bearer support
+
+HTTP Bearer methods are recognized by `Token string` and an optional `Roles []string`
+field, without a `Scopes` field. As with other supported schemes, method names are
+irrelevant, local aliases and pointers are supported, and unused credential types
+do not add dependencies. `Token` with `Scopes` uses the separate OAuth2
+implementation; mixed `Roles` and `Scopes` are rejected as ambiguous.
+
+Both `BearerAuthV6qPt` and `ReferencedBearerAuthZ8yHd` use the same generated helper
+and dependency interface:
+
+```go
+type BearerTokenVerifier interface {
+    VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error)
+}
+```
+
+Ogen extracts the token from the request. The verifier receives the raw token
+without the `Bearer ` prefix and the Go credential type name as `scheme`, not
+the operation name. Use this namespace to select the appropriate trust policy,
+keys, issuer, audience, or token store for each scheme. The helper does not trim,
+decode, or otherwise change the token before verification.
+
+Bearer describes how credentials are presented, not a particular token format.
+The generated code therefore does not select a JWT library or force JWT usage.
+Implement the verifier for your application:
+
+- For JWTs, validate the signature with trusted keys and an explicit algorithm
+  allowlist, expected issuer and audience, and any required claims. Parsing or
+  decoding a JWT alone does not authenticate it; see [JWT best practices](https://www.rfc-editor.org/rfc/rfc8725).
+- For opaque tokens, verify them against a trusted store or authenticated
+  introspection service. Never accept a token merely because it is nonempty.
+
+Return `ErrInvalidBearerToken` (possibly wrapped) for invalid or unknown tokens,
+or another error for operational failures. Return only verified information:
+
+- `Active`: must explicitly be true for a valid, active token; false for revoked
+  or otherwise inactive tokens. The zero-value record always rejects access.
+- `Subject`: the authenticated user or service identifier.
+- `Roles`: actual granted roles, taken only from trusted, verified data.
+- `NotBefore`: earliest accepted time; zero means no lower bound.
+- `ExpiresAt`: expiration time; zero means no upper bound.
+
+The verifier must enforce whether expiration and other claims are mandatory for
+its token format and policy. The helper checks nonzero time bounds without clock
+leeway and requires every role supplied by ogen. Required roles are not treated
+as granted permissions. It checks context cancellation before and after verifying.
+Implementations must be safe for concurrent requests, honor cancellation, and
+never log raw tokens or include them in errors.
+
+On success, `BearerAuthIdentityFromContext(ctx, scheme)` returns `Subject` and
+copied `Roles`; the raw token is not stored in the identity. Identities for
+different Bearer schemes coexist with API key and Basic auth identities.
+
+Errors can be inspected with `errors.Is`:
+
+- `ErrInvalidBearerToken`: empty, invalid, inactive, expired, or not-yet-valid token.
+- `ErrBearerAuthForbidden`: missing one or more required roles.
+- `ErrBearerTokenVerifierNotConfigured`: the constructor received a nil verifier.
+
+Verifier errors are wrapped while preserving their identity. The application
+currently passes nil, rejecting Bearer requests until a verifier is configured.
+HTTPS, rate limiting, and HTTP error/challenge formatting belong to the transport
+or deployment layer, not this generated handler.
+
+## OAuth2 support
+
+OAuth2 methods are recognized by `Token string` and `Scopes []string` fields,
+independently of method and scheme names. Local aliases and pointer credentials
+are supported. `Token` without `Scopes` is treated as HTTP Bearer; unused OAuth2
+types add no dependencies. Required scopes may be nil or empty at runtime, but
+the token must still be authenticated.
+
+The generated file declares its own dependency interface:
+
+```go
+type OAuth2TokenVerifier interface {
+    VerifyOAuth2Token(ctx context.Context, scheme, token string) (OAuth2TokenRecord, error)
+}
+```
+
+The handler acts as a resource server: ogen extracts the incoming access token,
+the verifier authenticates it, and the generated helper enforces the operation's
+scope requirements. It does not implement login redirects, token issuance,
+authorization-code exchange, or refresh flows. The same handler works regardless
+of the grant used to obtain an access token; client/provider flow implementations
+remain outside `securitygen`.
+
+The verifier receives the unchanged token without the `Bearer ` prefix and the
+Go credential type name as `scheme` (for this project, `OAuth2N4kXb`). Select the
+trusted issuer, audience, signing keys, or introspection endpoint from your
+configuration for that scheme. `operationName` is not the scheme identifier;
+the operation's requirements are passed by ogen in `credentials.Scopes`.
+
+For JWT access tokens, verify signatures, permitted algorithms, the expected
+issuer and audience, and required claims. For opaque tokens, use a trusted token
+store or authenticated [token introspection](https://www.rfc-editor.org/rfc/rfc7662.html#section-2.2).
+The verifier must accept only access tokens intended for this API, not refresh
+tokens or OpenID Connect ID tokens. Merely decoding a JWT is not verification.
+
+Return `ErrInvalidOAuth2Token` (possibly wrapped) for invalid/unknown tokens,
+another error for operational failures, or verified `OAuth2TokenRecord` data:
+
+- `Active`: explicitly true for a valid, active token; false for inactive or
+  revoked tokens. The zero-value record always rejects access.
+- `Subject`: the user/service identifier, when provided by the authorization server.
+- `ClientID`: the client identifier, when available; client-only identities need
+  not have a user subject.
+- `Scopes`: actual granted permissions from verified token data or introspection.
+  Decode a provider's space-separated `scope` string into individual entries;
+  do not copy the operation's required scopes into this field.
+- `NotBefore` / `ExpiresAt`: verified validity bounds. Zero means no corresponding
+  restriction; enforcing mandatory claims is the verifier's responsibility.
+
+The helper checks activity and nonzero time bounds without clock leeway and
+requires every requested scope using exact, case-sensitive matching. It does
+not expand wildcards or infer permissions from scope prefixes. An empty required
+scope list skips only scope authorization, not token validation. Implementations
+must be safe for concurrent use, honor context cancellation, and never log raw
+tokens or include them in errors. The helper also checks cancellation before and
+after verification.
+
+On success, `OAuth2IdentityFromContext(ctx, scheme)` returns `Subject`, `ClientID`,
+and a copy of granted `Scopes`. Raw tokens are not stored in the identity.
+Identities for different OAuth2 schemes and all other supported schemes coexist,
+including when several schemes are required together. HTTP Bearer roles cannot
+substitute for OAuth2 scopes or bypass its verifier.
+
+Errors can be inspected with `errors.Is`:
+
+- `ErrInvalidOAuth2Token`: empty, invalid, inactive, expired, or not-yet-valid token.
+- `ErrOAuth2Forbidden`: missing one or more required scopes.
+- `ErrOAuth2TokenVerifierNotConfigured`: the constructor received a nil verifier.
+
+Dependency errors are wrapped while preserving their identity. The application
+currently passes nil dependencies, so OAuth2 requests are rejected until a real
+verifier is configured. No third-party token library is imposed by the generator.
+HTTPS, rate limiting, and HTTP error/challenge formatting remain transport or
+deployment responsibilities.
+
 ## Configuration
 
 Configure the generator directly in the `//go:generate` directive:
@@ -195,7 +338,10 @@ The tests cover type detection, conditional constructor dependencies, renamed
 schemes, aliases, signature preservation, and generation failures. They also
 generate temporary modules and execute tests against the generated handlers,
 covering header, query, and cookie API keys, Basic auth password verification,
-unknown users, disabled accounts, role requirements, expiration, revocation,
-dependency errors, cancellation, and identity propagation across schemes. The
+unknown users, disabled accounts, Bearer/OAuth2 verification, inactive tokens, time
+bounds, role and scope requirements (including empty scopes and exact matching),
+client-only identities, expiration, revocation, dependency errors, cancellation,
+and identity propagation across all supported schemes. Unrecognized credentials
+remain explicit stubs. The
 temporary modules use only standard-library dependencies and disable network
 downloads.

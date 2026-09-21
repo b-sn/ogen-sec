@@ -104,8 +104,8 @@ func TestGenerateAPIKeyDetection(t *testing.T) {
 				if !bytes.Contains(code, []byte(`s.authorizeAPIKey(ctx, "CustomSecret", credentials.APIKey,`)) {
 					t.Fatal("API key method does not delegate to the shared implementation")
 				}
-			} else if !bytes.Contains(code, []byte("func NewHandler()")) {
-				t.Fatal("constructor without API keys must stay dependency-free")
+			} else if bytes.Contains(code, []byte("apiKeys APIKeyStore")) {
+				t.Fatal("constructor without API keys must not require an API key dependency")
 			}
 			again, err := generate(cfg)
 			if err != nil || !bytes.Equal(code, again) {

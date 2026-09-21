@@ -175,9 +175,9 @@ func TestAdditionalCredentialShapes(t *testing.T) {
 
 func TestOtherSchemesRemainStubs(t *testing.T) {
 	defer func() {
-		if got := recover(); got != "HandleBearer: not implemented" {
+		if got := recover(); got != "HandleUnsupported: not implemented" {
 			t.Fatalf("panic = %v", got)
 		}
 	}()
-	_, _ = NewHandler(nil).HandleBearer(context.Background(), "operation", api.BearerCredential{})
+	_, _ = NewHandler(nil).HandleUnsupported(context.Background(), "operation", api.CustomCredential{})
 }

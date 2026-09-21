@@ -30,6 +30,18 @@ func (f keyStoreFunc) LookupAPIKey(ctx context.Context, scheme string, hash [sha
 	return f(ctx, scheme, hash)
 }
 
+type bearerVerifierFunc func(context.Context, string, string) (BearerTokenRecord, error)
+
+func (f bearerVerifierFunc) VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error) {
+	return f(ctx, scheme, token)
+}
+
+type oauth2VerifierFunc func(context.Context, string, string) (OAuth2TokenRecord, error)
+
+func (f oauth2VerifierFunc) VerifyOAuth2Token(ctx context.Context, scheme, token string) (OAuth2TokenRecord, error) {
+	return f(ctx, scheme, token)
+}
+
 func TestBasicAuth(t *testing.T) {
 	storeError := errors.New("user store unavailable")
 	verifyError := errors.New("password verification failed")
@@ -120,7 +132,7 @@ func TestBasicAuth(t *testing.T) {
 				verifier = nil
 			}
 			required := slices.Clone(tc.required)
-			result, err := NewHandler(nil, store, verifier).HandleLogin(ctx, "operation", credentials)
+			result, err := NewHandler(nil, store, verifier, nil, nil).HandleLogin(ctx, "operation", credentials)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tc.wantErr)
 			}
@@ -169,7 +181,19 @@ func TestCredentialShapesAndCombinedIdentities(t *testing.T) {
 	keys := keyStoreFunc(func(_ context.Context, _ string, hash [sha256.Size]byte) (APIKeyRecord, error) {
 		return APIKeyRecord{Hash: hash, Subject: "api-key-owner"}, nil
 	})
-	h := NewHandler(keys, store, verifier)
+	bearer := bearerVerifierFunc(func(_ context.Context, scheme, token string) (BearerTokenRecord, error) {
+		if scheme != "BearerCredential" || token != "token" {
+			t.Fatal("incorrect bearer verifier arguments")
+		}
+		return BearerTokenRecord{Active: true, Subject: "token-owner"}, nil
+	})
+	oauth2 := oauth2VerifierFunc(func(_ context.Context, scheme, token string) (OAuth2TokenRecord, error) {
+		if scheme != "OAuthCredential" || token != "access-token" {
+			t.Fatal("incorrect OAuth2 verifier arguments")
+		}
+		return OAuth2TokenRecord{Active: true, Subject: "oauth-owner", ClientID: "client-7", Scopes: []string{"read"}}, nil
+	})
+	h := NewHandler(keys, store, verifier, bearer, oauth2)
 	ctx := context.Background()
 	ctx, err := h.HandleKey(ctx, "operation", api.KeyCredential{APIKey: "key"})
 	if err != nil {
@@ -180,6 +204,14 @@ func TestCredentialShapesAndCombinedIdentities(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, err = h.HandleAlias(ctx, "operation", api.AliasCredential{Username: "bob", Password: "password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = h.HandleBearer(ctx, "operation", api.BearerCredential{Token: "token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = h.HandleOAuth2(ctx, "operation", api.OAuthCredential{Token: "access-token", Scopes: []string{"read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +235,21 @@ func TestCredentialShapesAndCombinedIdentities(t *testing.T) {
 	}
 	keyIdentity, ok := APIKeyIdentityFromContext(ctx, "KeyCredential")
 	if !ok || keyIdentity.Subject != "api-key-owner" {
-		t.Fatal("API key identity was overwritten by Basic auth")
+		t.Fatal("API key identity was overwritten by another auth scheme")
+	}
+	bearerIdentity, ok := BearerAuthIdentityFromContext(ctx, "BearerCredential")
+	if !ok || bearerIdentity.Subject != "token-owner" {
+		t.Fatal("Bearer identity was lost")
+	}
+	oauthIdentity, ok := OAuth2IdentityFromContext(ctx, "OAuthCredential")
+	if !ok || oauthIdentity.Subject != "oauth-owner" || oauthIdentity.ClientID != "client-7" || !slices.Equal(oauthIdentity.Scopes, []string{"read"}) {
+		t.Fatal("OAuth2 identity was lost")
+	}
+	// A Bearer identity must not supply OAuth2 scopes or bypass a missing
+	// OAuth2 verifier, even though both credentials carry a token.
+	_, err = NewHandler(keys, store, verifier, bearer, nil).HandleOAuth2(ctx, "operation", api.OAuthCredential{Token: "access-token"})
+	if !errors.Is(err, ErrOAuth2TokenVerifierNotConfigured) {
+		t.Fatalf("other scheme bypassed OAuth2 verification: %v", err)
 	}
 	if _, ok := BasicAuthIdentityFromContext(ctx, "unknown"); ok {
 		t.Fatal("unexpected identity for unknown scheme")

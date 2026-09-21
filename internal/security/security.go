@@ -181,16 +181,187 @@ func (s *passthroughSecurityHandler) authorizeBasicAuth(ctx context.Context, sch
 	return context.WithValue(ctx, basicAuthContextKey{scheme: scheme}, identity), nil
 }
 
+// BearerTokenVerifier authenticates a token within a scheme's trust boundary.
+// scheme is the Go credential type name, not the operation name. Return
+// ErrInvalidBearerToken for invalid or unknown tokens. Only verified, trusted
+// identity information may be returned, with Active explicitly set to true.
+// JWT implementations must verify signatures using allowed algorithms and
+// trusted keys, and validate the expected issuer, audience and required claims.
+// Opaque token implementations must use a trusted store or introspection service.
+// Implementations must be safe for concurrent use, honor context cancellation,
+// and never log raw tokens or include them in errors.
+type BearerTokenVerifier interface {
+	VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error)
+}
+
+// BearerTokenRecord contains verified token information, never the raw token.
+// Active must be false for revoked/inactive tokens; the zero record rejects access.
+// Zero NotBefore/ExpiresAt values mean no corresponding time restriction. A
+// verifier must enforce any requirement for these claims before returning.
+type BearerTokenRecord struct {
+	Active    bool
+	Subject   string
+	Roles     []string
+	NotBefore time.Time
+	ExpiresAt time.Time
+}
+
+var (
+	ErrInvalidBearerToken               = errors.New("invalid bearer token")
+	ErrBearerAuthForbidden              = errors.New("insufficient bearer auth roles")
+	ErrBearerTokenVerifierNotConfigured = errors.New("bearer token verifier is not configured")
+)
+
+// BearerAuthIdentity contains verified identity information, without the token.
+type BearerAuthIdentity struct {
+	Subject string
+	Roles   []string
+}
+
+type bearerAuthContextKey struct{ scheme string }
+
+// BearerAuthIdentityFromContext returns the identity authenticated for a scheme.
+func BearerAuthIdentityFromContext(ctx context.Context, scheme string) (BearerAuthIdentity, bool) {
+	identity, ok := ctx.Value(bearerAuthContextKey{scheme: scheme}).(BearerAuthIdentity)
+	identity.Roles = slices.Clone(identity.Roles)
+	return identity, ok
+}
+
+func (s *passthroughSecurityHandler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if token == "" {
+		return ctx, ErrInvalidBearerToken
+	}
+	if s.bearerTokens == nil {
+		return ctx, ErrBearerTokenVerifierNotConfigured
+	}
+	record, err := s.bearerTokens.VerifyBearerToken(ctx, scheme, token)
+	if err != nil {
+		return ctx, fmt.Errorf("verify bearer token: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if !record.Active {
+		return ctx, ErrInvalidBearerToken
+	}
+	now := time.Now()
+	if !record.NotBefore.IsZero() && now.Before(record.NotBefore) {
+		return ctx, ErrInvalidBearerToken
+	}
+	if !record.ExpiresAt.IsZero() && !now.Before(record.ExpiresAt) {
+		return ctx, ErrInvalidBearerToken
+	}
+	for _, role := range requiredRoles {
+		if !slices.Contains(record.Roles, role) {
+			return ctx, ErrBearerAuthForbidden
+		}
+	}
+	identity := BearerAuthIdentity{Subject: record.Subject, Roles: slices.Clone(record.Roles)}
+	return context.WithValue(ctx, bearerAuthContextKey{scheme: scheme}, identity), nil
+}
+
+// OAuth2TokenVerifier authenticates an access token for this resource server.
+// scheme is the Go credential type name, not the operation name. Return
+// ErrInvalidOAuth2Token for invalid or unknown tokens. Return only verified
+// identity information and granted scopes, with Active explicitly set to true.
+// JWT implementations must verify signatures with trusted keys and allowed
+// algorithms, and validate the expected issuer, audience and required claims.
+// Opaque tokens require a trusted store or authenticated introspection service.
+// Reject refresh tokens and ID tokens: only access tokens intended for this API
+// are valid. Implementations must be safe for concurrent use, honor cancellation,
+// and never log raw tokens or include them in errors.
+type OAuth2TokenVerifier interface {
+	VerifyOAuth2Token(ctx context.Context, scheme, token string) (OAuth2TokenRecord, error)
+}
+
+// OAuth2TokenRecord contains verified access token information, not the token.
+// Active must be false for revoked/inactive tokens; the zero record rejects access.
+// Scopes are actual granted permissions, not the operation's requirements.
+// Zero NotBefore/ExpiresAt values mean no corresponding time restriction; the
+// verifier must enforce any requirement for these claims before returning.
+type OAuth2TokenRecord struct {
+	Active    bool
+	Subject   string
+	ClientID  string
+	Scopes    []string
+	NotBefore time.Time
+	ExpiresAt time.Time
+}
+
+var (
+	ErrInvalidOAuth2Token               = errors.New("invalid OAuth2 access token")
+	ErrOAuth2Forbidden                  = errors.New("insufficient OAuth2 scopes")
+	ErrOAuth2TokenVerifierNotConfigured = errors.New("OAuth2 token verifier is not configured")
+)
+
+// OAuth2Identity contains verified identity information, without the access token.
+// Subject may be empty for tokens identifying only a client via ClientID.
+type OAuth2Identity struct {
+	Subject  string
+	ClientID string
+	Scopes   []string
+}
+
+type oauth2ContextKey struct{ scheme string }
+
+// OAuth2IdentityFromContext returns the identity authenticated for a scheme.
+func OAuth2IdentityFromContext(ctx context.Context, scheme string) (OAuth2Identity, bool) {
+	identity, ok := ctx.Value(oauth2ContextKey{scheme: scheme}).(OAuth2Identity)
+	identity.Scopes = slices.Clone(identity.Scopes)
+	return identity, ok
+}
+
+func (s *passthroughSecurityHandler) authorizeOAuth2(ctx context.Context, scheme, token string, requiredScopes []string) (context.Context, error) {
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if token == "" {
+		return ctx, ErrInvalidOAuth2Token
+	}
+	if s.oauth2Tokens == nil {
+		return ctx, ErrOAuth2TokenVerifierNotConfigured
+	}
+	record, err := s.oauth2Tokens.VerifyOAuth2Token(ctx, scheme, token)
+	if err != nil {
+		return ctx, fmt.Errorf("verify OAuth2 access token: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return ctx, err
+	}
+	if !record.Active {
+		return ctx, ErrInvalidOAuth2Token
+	}
+	now := time.Now()
+	if !record.NotBefore.IsZero() && now.Before(record.NotBefore) {
+		return ctx, ErrInvalidOAuth2Token
+	}
+	if !record.ExpiresAt.IsZero() && !now.Before(record.ExpiresAt) {
+		return ctx, ErrInvalidOAuth2Token
+	}
+	for _, scope := range requiredScopes {
+		if !slices.Contains(record.Scopes, scope) {
+			return ctx, ErrOAuth2Forbidden
+		}
+	}
+	identity := OAuth2Identity{Subject: record.Subject, ClientID: record.ClientID, Scopes: slices.Clone(record.Scopes)}
+	return context.WithValue(ctx, oauth2ContextKey{scheme: scheme}, identity), nil
+}
+
 // passthroughSecurityHandler implements api.SecurityHandler. Unsupported schemes remain stubs.
 type passthroughSecurityHandler struct {
-	apiKeys   APIKeyStore
-	basicAuth BasicAuthStore
-	passwords PasswordVerifier
+	apiKeys      APIKeyStore
+	basicAuth    BasicAuthStore
+	passwords    PasswordVerifier
+	bearerTokens BearerTokenVerifier
+	oauth2Tokens OAuth2TokenVerifier
 }
 
 // NewPassthroughSecurityHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewPassthroughSecurityHandler(apiKeys APIKeyStore, basicAuth BasicAuthStore, passwords PasswordVerifier) *passthroughSecurityHandler {
-	return &passthroughSecurityHandler{apiKeys: apiKeys, basicAuth: basicAuth, passwords: passwords}
+func NewPassthroughSecurityHandler(apiKeys APIKeyStore, basicAuth BasicAuthStore, passwords PasswordVerifier, bearerTokens BearerTokenVerifier, oauth2Tokens OAuth2TokenVerifier) *passthroughSecurityHandler {
+	return &passthroughSecurityHandler{apiKeys: apiKeys, basicAuth: basicAuth, passwords: passwords, bearerTokens: bearerTokens, oauth2Tokens: oauth2Tokens}
 }
 
 var _ api.SecurityHandler = (*passthroughSecurityHandler)(nil)
@@ -216,16 +387,16 @@ func (s *passthroughSecurityHandler) HandleBasicAuthF5wJz(ctx context.Context, _
 }
 
 // HandleBearerAuthV6qPt implements api.SecurityHandler.
-func (*passthroughSecurityHandler) HandleBearerAuthV6qPt(ctx context.Context, operationName api.OperationName, t api.BearerAuthV6qPt) (context.Context, error) {
-	panic("HandleBearerAuthV6qPt: not implemented")
+func (s *passthroughSecurityHandler) HandleBearerAuthV6qPt(ctx context.Context, _ api.OperationName, credentials api.BearerAuthV6qPt) (context.Context, error) {
+	return s.authorizeBearerAuth(ctx, "BearerAuthV6qPt", credentials.Token, credentials.Roles)
 }
 
 // HandleOAuth2N4kXb implements api.SecurityHandler.
-func (*passthroughSecurityHandler) HandleOAuth2N4kXb(ctx context.Context, operationName api.OperationName, t api.OAuth2N4kXb) (context.Context, error) {
-	panic("HandleOAuth2N4kXb: not implemented")
+func (s *passthroughSecurityHandler) HandleOAuth2N4kXb(ctx context.Context, _ api.OperationName, credentials api.OAuth2N4kXb) (context.Context, error) {
+	return s.authorizeOAuth2(ctx, "OAuth2N4kXb", credentials.Token, credentials.Scopes)
 }
 
 // HandleReferencedBearerAuthZ8yHd implements api.SecurityHandler.
-func (*passthroughSecurityHandler) HandleReferencedBearerAuthZ8yHd(ctx context.Context, operationName api.OperationName, t api.ReferencedBearerAuthZ8yHd) (context.Context, error) {
-	panic("HandleReferencedBearerAuthZ8yHd: not implemented")
+func (s *passthroughSecurityHandler) HandleReferencedBearerAuthZ8yHd(ctx context.Context, _ api.OperationName, credentials api.ReferencedBearerAuthZ8yHd) (context.Context, error) {
+	return s.authorizeBearerAuth(ctx, "ReferencedBearerAuthZ8yHd", credentials.Token, credentials.Roles)
 }

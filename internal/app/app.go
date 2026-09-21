@@ -30,8 +30,8 @@ func New(ctx context.Context) (*App, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	// API key and Basic auth requests are rejected until their dependencies are configured.
-	handler, err := transporthttp.NewHandler(security.NewPassthroughSecurityHandler(nil, nil, nil))
+	// Supported auth schemes reject requests until their dependencies are configured.
+	handler, err := transporthttp.NewHandler(security.NewPassthroughSecurityHandler(nil, nil, nil, nil, nil))
 	if err != nil {
 		return nil, fmt.Errorf("build http handler: %w", err)
 	}

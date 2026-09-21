@@ -13,6 +13,12 @@ var apiKeySource string
 //go:embed templates/basicauth.go.tmpl
 var basicAuthSource string
 
+//go:embed templates/bearerauth.go.tmpl
+var bearerAuthSource string
+
+//go:embed templates/oauth2.go.tmpl
+var oauth2Source string
+
 type dependency struct {
 	field string
 	typ   string
@@ -58,6 +64,32 @@ var supportedSchemes = []schemeSupport{
 			"context": "context", "errors": "errors", "fmt": "fmt", "slices": "slices", "time": "time",
 		},
 		template: template.Must(template.New("basicauth").Parse(basicAuthSource)),
+	},
+	{
+		kind: bearerAuthKind,
+		name: "Bearer auth",
+		declarations: []string{
+			"BearerTokenVerifier", "BearerTokenRecord", "BearerAuthIdentity", "BearerAuthIdentityFromContext",
+			"bearerAuthContextKey", "ErrInvalidBearerToken", "ErrBearerAuthForbidden", "ErrBearerTokenVerifierNotConfigured",
+		},
+		dependencies: []dependency{{field: "bearerTokens", typ: "BearerTokenVerifier"}},
+		imports: map[string]string{
+			"context": "context", "errors": "errors", "fmt": "fmt", "slices": "slices", "time": "time",
+		},
+		template: template.Must(template.New("bearerauth").Parse(bearerAuthSource)),
+	},
+	{
+		kind: oauth2Kind,
+		name: "OAuth2",
+		declarations: []string{
+			"OAuth2TokenVerifier", "OAuth2TokenRecord", "OAuth2Identity", "OAuth2IdentityFromContext",
+			"oauth2ContextKey", "ErrInvalidOAuth2Token", "ErrOAuth2Forbidden", "ErrOAuth2TokenVerifierNotConfigured",
+		},
+		dependencies: []dependency{{field: "oauth2Tokens", typ: "OAuth2TokenVerifier"}},
+		imports: map[string]string{
+			"context": "context", "errors": "errors", "fmt": "fmt", "slices": "slices", "time": "time",
+		},
+		template: template.Must(template.New("oauth2").Parse(oauth2Source)),
 	},
 }
 

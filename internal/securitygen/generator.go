@@ -205,8 +205,13 @@ func generate(cfg config) ([]byte, error) {
 		} else {
 			fmt.Fprintf(&methods, "func (s *%s) %s%s {\n", cfg.typeName, name, sig.String()[len("func"):])
 			invalidError := "ErrInvalidAPIKey"
-			if security.kind == basicAuthKind {
+			switch security.kind {
+			case basicAuthKind:
 				invalidError = "ErrInvalidBasicAuth"
+			case bearerAuthKind:
+				invalidError = "ErrInvalidBearerToken"
+			case oauth2Kind:
+				invalidError = "ErrInvalidOAuth2Token"
 			}
 			if security.pointer {
 				fmt.Fprintf(&methods, "if credentials == nil { return ctx, %s }\n", invalidError)
@@ -215,10 +220,15 @@ func generate(cfg config) ([]byte, error) {
 			if security.roles {
 				roles = "credentials.Roles"
 			}
-			if security.kind == apiKeyKind {
+			switch security.kind {
+			case apiKeyKind:
 				fmt.Fprintf(&methods, "return s.authorizeAPIKey(ctx, %q, credentials.APIKey, %s)\n}\n\n", security.scheme, roles)
-			} else {
+			case basicAuthKind:
 				fmt.Fprintf(&methods, "return s.authorizeBasicAuth(ctx, %q, credentials.Username, credentials.Password, %s)\n}\n\n", security.scheme, roles)
+			case bearerAuthKind:
+				fmt.Fprintf(&methods, "return s.authorizeBearerAuth(ctx, %q, credentials.Token, %s)\n}\n\n", security.scheme, roles)
+			case oauth2Kind:
+				fmt.Fprintf(&methods, "return s.authorizeOAuth2(ctx, %q, credentials.Token, credentials.Scopes)\n}\n\n", security.scheme)
 			}
 		}
 	}

@@ -20,4 +20,4 @@ type QueryCredential struct {
 type LegacyCredential struct{ APIKey string }
 type AliasCredential = HeaderCredential
 type PointerCredential struct{ APIKey string }
-type BearerCredential struct{ Token string }
+type CustomCredential struct{ Credentials string }

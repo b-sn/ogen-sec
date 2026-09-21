@@ -9,5 +9,5 @@ type SecurityHandler interface {
 	HandleLegacy(ctxt.Context, OperationName, LegacyCredential) (ctxt.Context, error)
 	HandleAlias(ctxt.Context, OperationName, AliasCredential) (ctxt.Context, error)
 	HandlePointer(ctxt.Context, OperationName, *PointerCredential) (ctxt.Context, error)
-	HandleBearer(ctxt.Context, OperationName, BearerCredential) (ctxt.Context, error)
+	HandleUnsupported(ctxt.Context, OperationName, CustomCredential) (ctxt.Context, error)
 }

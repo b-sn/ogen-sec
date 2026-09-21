@@ -16,6 +16,8 @@ type securityKind int
 const (
 	apiKeyKind securityKind = iota + 1
 	basicAuthKind
+	bearerAuthKind
+	oauth2Kind
 )
 
 type securityMethod struct {
@@ -122,29 +124,51 @@ func detectSecurityMethod(signature *ast.FuncType, declarations map[string]ast.E
 	keyType, hasKey := fields["APIKey"]
 	usernameType, hasUsername := fields["Username"]
 	passwordType, hasPassword := fields["Password"]
-	if !hasKey && !hasUsername && !hasPassword {
+	tokenType, hasToken := fields["Token"]
+	scopes, hasScopes := fields["Scopes"]
+	if !hasKey && !hasUsername && !hasPassword && !hasToken && !hasScopes {
 		return nil, nil
 	}
 	if hasKey && (hasUsername || hasPassword) {
 		return nil, fmt.Errorf("credential %s mixes API key and Basic auth fields", scheme)
 	}
+	if hasToken && (hasKey || hasUsername || hasPassword) {
+		return nil, fmt.Errorf("credential %s mixes token and other authentication fields", scheme)
+	}
+	if hasScopes && (hasKey || hasUsername || hasPassword) {
+		return nil, fmt.Errorf("credential %s mixes Scopes and other authentication fields", scheme)
+	}
 	kind, description := apiKeyKind, "API key"
-	if hasKey {
+	switch {
+	case hasToken || hasScopes:
+		// Ogen distinguishes HTTP Bearer credentials (Roles) from OAuth2
+		// credentials (Scopes). Never authorize OAuth2 while ignoring scopes.
+		kind, description = bearerAuthKind, "Bearer auth"
+		if hasScopes {
+			if _, hasRoles := fields["Roles"]; hasRoles {
+				return nil, fmt.Errorf("token credential %s mixes Roles and Scopes", scheme)
+			}
+			kind, description = oauth2Kind, "OAuth2"
+			if !isStringSlice(scopes) {
+				return nil, fmt.Errorf("OAuth2 credential %s must have Scopes of type []string", scheme)
+			}
+		}
+		if !isIdent(tokenType, "string") {
+			return nil, fmt.Errorf("%s credential %s must have a Token string field", description, scheme)
+		}
+	case hasKey:
 		if !isIdent(keyType, "string") {
 			return nil, fmt.Errorf("API key credential %s must have an APIKey string field", scheme)
 		}
-	} else {
+	default:
 		kind, description = basicAuthKind, "Basic auth"
 		if !isIdent(usernameType, "string") || !isIdent(passwordType, "string") {
 			return nil, fmt.Errorf("Basic auth credential %s must have Username and Password string fields", scheme)
 		}
 	}
 	roles, hasRoles := fields["Roles"]
-	if hasRoles {
-		array, ok := roles.(*ast.ArrayType)
-		if !ok || array.Len != nil || !isIdent(array.Elt, "string") {
-			return nil, fmt.Errorf("%s credential %s must have Roles of type []string", description, scheme)
-		}
+	if hasRoles && !isStringSlice(roles) {
+		return nil, fmt.Errorf("%s credential %s must have Roles of type []string", description, scheme)
 	}
 	results := fieldTypes(signature.Results)
 	if !isContext(params[0], imports) || len(results) != 2 || !isContext(results[0], imports) || !isIdent(results[1], "error") {
@@ -172,6 +196,11 @@ func fieldTypes(fields *ast.FieldList) []ast.Expr {
 func isIdent(expr ast.Expr, name string) bool {
 	ident, ok := expr.(*ast.Ident)
 	return ok && ident.Name == name
+}
+
+func isStringSlice(expr ast.Expr) bool {
+	array, ok := expr.(*ast.ArrayType)
+	return ok && array.Len == nil && isIdent(array.Elt, "string")
 }
 
 func isContext(expr ast.Expr, imports map[string]string) bool {

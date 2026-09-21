@@ -8,4 +8,6 @@ type SecurityHandler interface {
 	HandleAlias(ctxt.Context, OperationName, AliasCredential) (ctxt.Context, error)
 	HandlePointer(ctxt.Context, OperationName, *PointerCredential) (ctxt.Context, error)
 	HandleKey(ctxt.Context, OperationName, KeyCredential) (ctxt.Context, error)
+	HandleBearer(ctxt.Context, OperationName, BearerCredential) (ctxt.Context, error)
+	HandleOAuth2(ctxt.Context, OperationName, OAuthCredential) (ctxt.Context, error)
 }
