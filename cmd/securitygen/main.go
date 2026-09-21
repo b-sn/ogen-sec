@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"ogen-sec/internal/securitygen"
+	"github.com/b-sn/ogen-sec/securitygen"
 )
 
 func main() {
