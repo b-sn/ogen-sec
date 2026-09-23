@@ -21,15 +21,15 @@ func TestAPIKeyMethods(t *testing.T) {
 	backendError := errors.New("backend unavailable")
 	for _, method := range []struct {
 		scheme string
-		call   func(*Handler, context.Context, string, []string) (context.Context, error)
+		call   func(*handler, context.Context, string, []string) (context.Context, error)
 	}{
-		{"CookieCredential", func(h *Handler, ctx context.Context, key string, roles []string) (context.Context, error) {
+		{"CookieCredential", func(h *handler, ctx context.Context, key string, roles []string) (context.Context, error) {
 			return h.HandleCookie(ctx, "operation", api.CookieCredential{APIKey: key, Roles: roles})
 		}},
-		{"HeaderCredential", func(h *Handler, ctx context.Context, key string, roles []string) (context.Context, error) {
+		{"HeaderCredential", func(h *handler, ctx context.Context, key string, roles []string) (context.Context, error) {
 			return h.HandleHeader(ctx, "operation", api.HeaderCredential{APIKey: key, Roles: roles})
 		}},
-		{"QueryCredential", func(h *Handler, ctx context.Context, key string, roles []string) (context.Context, error) {
+		{"QueryCredential", func(h *handler, ctx context.Context, key string, roles []string) (context.Context, error) {
 			return h.HandleQuery(ctx, "operation", api.QueryCredential{APIKey: key, Roles: roles})
 		}},
 	} {

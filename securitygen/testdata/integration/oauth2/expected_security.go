@@ -62,7 +62,7 @@ func OAuth2IdentityFromContext(ctx context.Context, scheme string) (OAuth2Identi
 	return identity, ok
 }
 
-func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, requiredScopes []string) (context.Context, error) {
+func (s *handler) authorizeOAuth2(ctx context.Context, scheme, token string, requiredScopes []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -75,9 +75,6 @@ func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, req
 	record, err := s.oauth2Tokens.VerifyOAuth2Token(ctx, scheme, token)
 	if err != nil {
 		return ctx, fmt.Errorf("verify OAuth2 access token: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
 	}
 	if !record.Active {
 		return ctx, ErrInvalidOAuth2Token
@@ -98,19 +95,19 @@ func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, req
 	return context.WithValue(ctx, oauth2ContextKey{scheme: scheme}, identity), nil
 }
 
-// Handler implements api.SecurityHandler. Unsupported schemes remain stubs.
-type Handler struct {
+// handler implements api.SecurityHandler. Unsupported schemes remain stubs.
+type handler struct {
 	oauth2Tokens OAuth2TokenVerifier
 }
 
 // NewHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewHandler(oauth2Tokens OAuth2TokenVerifier) *Handler {
-	return &Handler{oauth2Tokens: oauth2Tokens}
+func NewHandler(oauth2Tokens OAuth2TokenVerifier) *handler {
+	return &handler{oauth2Tokens: oauth2Tokens}
 }
 
-var _ api.SecurityHandler = (*Handler)(nil)
+var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetOAuth implements api.SecurityHandler.
-func (s *Handler) HandleWidgetOAuth(ctx context.Context, _ api.OperationName, credentials api.WidgetOAuth) (context.Context, error) {
+func (s *handler) HandleWidgetOAuth(ctx context.Context, _ api.OperationName, credentials api.WidgetOAuth) (context.Context, error) {
 	return s.authorizeOAuth2(ctx, "WidgetOAuth", credentials.Token, credentials.Scopes)
 }

@@ -30,9 +30,9 @@ func (f keyStoreFunc) LookupAPIKey(ctx context.Context, scheme string, hash [sha
 	return f(ctx, scheme, hash)
 }
 
-type bearerVerifierFunc func(context.Context, string, string) (BearerTokenRecord, error)
+type bearerVerifierFunc func(context.Context, string, string) (string, []string, error)
 
-func (f bearerVerifierFunc) VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error) {
+func (f bearerVerifierFunc) VerifyBearerToken(ctx context.Context, scheme, token string) (string, []string, error) {
 	return f(ctx, scheme, token)
 }
 
@@ -106,6 +106,7 @@ func TestBasicAuth(t *testing.T) {
 				}
 				if tc.cancelAt == "lookup" {
 					cancel()
+					return record, got.Err()
 				}
 				return record, tc.storeErr
 			})
@@ -120,6 +121,7 @@ func TestBasicAuth(t *testing.T) {
 				}
 				if tc.cancelAt == "verify" {
 					cancel()
+					return false, got.Err()
 				}
 				// Even a verifier that incorrectly accepts an empty hash cannot
 				// authorize an unknown user or an account with no stored hash.
@@ -181,11 +183,11 @@ func TestCredentialShapesAndCombinedIdentities(t *testing.T) {
 	keys := keyStoreFunc(func(_ context.Context, _ string, hash [sha256.Size]byte) (APIKeyRecord, error) {
 		return APIKeyRecord{Hash: hash, Subject: "api-key-owner"}, nil
 	})
-	bearer := bearerVerifierFunc(func(_ context.Context, scheme, token string) (BearerTokenRecord, error) {
+	bearer := bearerVerifierFunc(func(_ context.Context, scheme, token string) (string, []string, error) {
 		if scheme != "BearerCredential" || token != "token" {
 			t.Fatal("incorrect bearer verifier arguments")
 		}
-		return BearerTokenRecord{Active: true, Subject: "token-owner"}, nil
+		return "token-owner", nil, nil
 	})
 	oauth2 := oauth2VerifierFunc(func(_ context.Context, scheme, token string) (OAuth2TokenRecord, error) {
 		if scheme != "OAuthCredential" || token != "access-token" {

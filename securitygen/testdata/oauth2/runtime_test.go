@@ -90,6 +90,7 @@ func TestOAuth2(t *testing.T) {
 				}
 				if tc.cancelAt == "verify" {
 					cancel()
+					return record, got.Err()
 				}
 				return record, tc.verifyErr
 			})

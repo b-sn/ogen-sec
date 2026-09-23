@@ -69,12 +69,12 @@ var supportedSchemes = []schemeSupport{
 		kind: bearerAuthKind,
 		name: "Bearer auth",
 		declarations: []string{
-			"BearerTokenVerifier", "BearerTokenRecord", "BearerAuthIdentity", "BearerAuthIdentityFromContext",
+			"BearerTokenVerifier", "BearerAuthIdentity", "BearerAuthIdentityFromContext",
 			"bearerAuthContextKey", "ErrInvalidBearerToken", "ErrBearerAuthForbidden", "ErrBearerTokenVerifierNotConfigured",
 		},
 		dependencies: []dependency{{field: "bearerTokens", typ: "BearerTokenVerifier"}},
 		imports: map[string]string{
-			"context": "context", "errors": "errors", "fmt": "fmt", "slices": "slices", "time": "time",
+			"context": "context", "errors": "errors", "fmt": "fmt", "slices": "slices",
 		},
 		template: template.Must(template.New("bearerauth").Parse(bearerAuthSource)),
 	},
@@ -93,8 +93,8 @@ var supportedSchemes = []schemeSupport{
 	},
 }
 
-func (s schemeSupport) render(cfg config, q *qualifier) ([]byte, error) {
-	data := map[string]string{"Type": cfg.typeName}
+func (s schemeSupport) render(q *qualifier) ([]byte, error) {
+	data := map[string]string{"Type": handlerTypeName}
 	for name, importPath := range s.imports {
 		data[name] = q.importName(name, importPath)
 	}

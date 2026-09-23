@@ -71,15 +71,9 @@ func (s *{{.Type}}) authorizeBasicAuth(ctx {{.context}}.Context, scheme, usernam
 		// requests a dummy password check and cannot authorize the request.
 		record = BasicAuthRecord{}
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
 	valid, err := s.passwords.VerifyPassword(ctx, record.PasswordHash, password)
 	if err != nil {
 		return ctx, {{.fmt}}.Errorf("verify basic auth password: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
 	}
 	if !valid || record.PasswordHash == "" || record.Disabled {
 		return ctx, ErrInvalidBasicAuth
@@ -95,4 +89,3 @@ func (s *{{.Type}}) authorizeBasicAuth(ctx {{.context}}.Context, scheme, usernam
 	identity := BasicAuthIdentity{Subject: record.Subject, Username: username, Roles: {{.slices}}.Clone(record.Roles)}
 	return {{.context}}.WithValue(ctx, basicAuthContextKey{scheme: scheme}, identity), nil
 }
-

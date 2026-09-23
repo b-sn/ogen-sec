@@ -18,12 +18,13 @@ import (
 	"strings"
 )
 
+const handlerTypeName = "handler"
+
 type config struct {
 	source      string
 	output      string
 	apiImport   string
 	packageName string
-	typeName    string
 	constructor string
 }
 
@@ -36,7 +37,6 @@ func Run(args []string) error {
 	flags.StringVar(&cfg.output, "output", "", "destination Go file, overwritten on every run (required)")
 	flags.StringVar(&cfg.apiImport, "api-import", "", "import path of the source API package (required)")
 	flags.StringVar(&cfg.packageName, "package", "security", "destination package name")
-	flags.StringVar(&cfg.typeName, "type", "passthroughSecurityHandler", "implementation type name")
 	flags.StringVar(&cfg.constructor, "constructor", "NewPassthroughSecurityHandler", "constructor name")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -47,13 +47,13 @@ func Run(args []string) error {
 	if cfg.source == "" || cfg.output == "" || cfg.apiImport == "" {
 		return fmt.Errorf("-source, -output and -api-import are required")
 	}
-	for _, name := range []string{cfg.packageName, cfg.typeName, cfg.constructor} {
+	for _, name := range []string{cfg.packageName, cfg.constructor} {
 		if !token.IsIdentifier(name) || name == "_" || name == "init" || types.Universe.Lookup(name) != nil {
 			return fmt.Errorf("invalid generated identifier %q", name)
 		}
 	}
-	if cfg.typeName == cfg.constructor {
-		return fmt.Errorf("type and constructor names must differ")
+	if cfg.constructor == handlerTypeName {
+		return fmt.Errorf("constructor name %q conflicts with generated handler type", cfg.constructor)
 	}
 	sourcePath, err := filepath.Abs(cfg.source)
 	if err != nil {
@@ -108,7 +108,7 @@ func generate(cfg config) ([]byte, error) {
 	q := qualifier{
 		sourceImports: make(map[string]string),
 		imports:       make(map[string]string),
-		reserved:      map[string]bool{cfg.typeName: true, cfg.constructor: true},
+		reserved:      map[string]bool{handlerTypeName: true, cfg.constructor: true},
 	}
 	q.apiAlias = q.importName("api", cfg.apiImport)
 	for _, spec := range file.Imports {
@@ -167,7 +167,7 @@ func generate(cfg config) ([]byte, error) {
 		if !kinds[scheme.kind] {
 			continue
 		}
-		code, err := scheme.render(cfg, &q)
+		code, err := scheme.render(&q)
 		if err != nil {
 			return nil, err
 		}
@@ -201,9 +201,9 @@ func generate(cfg config) ([]byte, error) {
 		fmt.Fprintf(&methods, "// %s implements %s.SecurityHandler.\n", name, q.apiAlias)
 		if security == nil {
 			fmt.Fprintf(&methods, "func (*%s) %s%s {\n\tpanic(%q)\n}\n\n",
-				cfg.typeName, name, sig.String()[len("func"):], name+": not implemented")
+				handlerTypeName, name, sig.String()[len("func"):], name+": not implemented")
 		} else {
-			fmt.Fprintf(&methods, "func (s *%s) %s%s {\n", cfg.typeName, name, sig.String()[len("func"):])
+			fmt.Fprintf(&methods, "func (s *%s) %s%s {\n", handlerTypeName, name, sig.String()[len("func"):])
 			invalidError := "ErrInvalidAPIKey"
 			switch security.kind {
 			case basicAuthKind:
@@ -245,8 +245,8 @@ func generate(cfg config) ([]byte, error) {
 	}
 	fmt.Fprint(&out, ")\n\n")
 	out.Write(support)
-	fmt.Fprintf(&out, "// %s implements %s.SecurityHandler. Unsupported schemes remain stubs.\n", cfg.typeName, q.apiAlias)
-	fmt.Fprintf(&out, "type %s struct {\n", cfg.typeName)
+	fmt.Fprintf(&out, "// %s implements %s.SecurityHandler. Unsupported schemes remain stubs.\n", handlerTypeName, q.apiAlias)
+	fmt.Fprintf(&out, "type %s struct {\n", handlerTypeName)
 	var arguments, initializers []string
 	for _, dep := range dependencies {
 		fmt.Fprintf(&out, "%s %s\n", dep.field, dep.typ)
@@ -256,8 +256,8 @@ func generate(cfg config) ([]byte, error) {
 	fmt.Fprint(&out, "}\n\n")
 	fmt.Fprintf(&out, "// %s creates a security handler. Nil dependencies reject requests for their schemes.\n", cfg.constructor)
 	fmt.Fprintf(&out, "func %s(%s) *%s {\nreturn &%s{%s}\n}\n\n",
-		cfg.constructor, strings.Join(arguments, ", "), cfg.typeName, cfg.typeName, strings.Join(initializers, ", "))
-	fmt.Fprintf(&out, "var _ %s.SecurityHandler = (*%s)(nil)\n\n", q.apiAlias, cfg.typeName)
+		cfg.constructor, strings.Join(arguments, ", "), handlerTypeName, handlerTypeName, strings.Join(initializers, ", "))
+	fmt.Fprintf(&out, "var _ %s.SecurityHandler = (*%s)(nil)\n\n", q.apiAlias, handlerTypeName)
 	out.Write(methods.Bytes())
 	code, err := format.Source(out.Bytes())
 	if err != nil {

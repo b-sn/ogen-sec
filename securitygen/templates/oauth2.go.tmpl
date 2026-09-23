@@ -63,9 +63,6 @@ func (s *{{.Type}}) authorizeOAuth2(ctx {{.context}}.Context, scheme, token stri
 	if err != nil {
 		return ctx, {{.fmt}}.Errorf("verify OAuth2 access token: %w", err)
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
 	if !record.Active {
 		return ctx, ErrInvalidOAuth2Token
 	}
@@ -84,4 +81,3 @@ func (s *{{.Type}}) authorizeOAuth2(ctx {{.context}}.Context, scheme, token stri
 	identity := OAuth2Identity{Subject: record.Subject, ClientID: record.ClientID, Scopes: {{.slices}}.Clone(record.Scopes)}
 	return {{.context}}.WithValue(ctx, oauth2ContextKey{scheme: scheme}, identity), nil
 }
-

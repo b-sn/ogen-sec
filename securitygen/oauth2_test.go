@@ -84,7 +84,7 @@ func TestGenerateOAuth2Detection(t *testing.T) {
 			models := "package api\n" + tc.declaration + "\n"
 			cfg := config{
 				source: filepath.Join(dir, "security.go"), output: filepath.Join(dir, "out", "security.go"),
-				apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler",
+				apiImport: "example.test/api", packageName: "security", constructor: "NewHandler",
 			}
 			writeTestFile(t, cfg.source, []byte(source))
 			writeTestFile(t, filepath.Join(dir, "models.go"), []byte(models))
@@ -162,7 +162,7 @@ type Token struct { Token string; Roles []string }
 type OAuth struct { Token string; Scopes []string }
 type OtherOAuth = OAuth
 type SecurityHandler interface { ` + methods + " }\n"
-			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler"}
+			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", constructor: "NewHandler"}
 			writeTestFile(t, cfg.source, []byte(source))
 			code, err := generate(cfg)
 			if err != nil {

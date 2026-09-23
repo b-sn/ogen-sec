@@ -54,7 +54,6 @@ type SecurityHandler interface {
 				source:      source,
 				apiImport:   "example.test/api",
 				packageName: "security",
-				typeName:    "Handler",
 				constructor: "NewHandler",
 			}
 			code, err := generate(cfg)
@@ -62,6 +61,9 @@ type SecurityHandler interface {
 				t.Fatal(err)
 			}
 			assertImplementationCompiles(t, cfg, code, tc.source)
+			if !bytes.Contains(code, []byte("type handler struct")) || bytes.Contains(code, []byte("type Handler struct")) || !bytes.Contains(code, []byte("func NewHandler() *handler")) {
+				t.Fatal("generated handler type must be private and available through its constructor")
+			}
 			if bytes.Contains(code, []byte(`"strings"`)) {
 				t.Fatal("unused source imports leaked into the output")
 			}
@@ -82,7 +84,7 @@ func TestRunReplacesOutput(t *testing.T) {
 	output := filepath.Join(dir, "nested", "custom.go")
 	args := []string{
 		"-source", source, "-output", output, "-api-import", "example.test/api",
-		"-package", "auth", "-type", "Stub", "-constructor", "NewStub",
+		"-package", "auth", "-constructor", "NewStub",
 	}
 	writeTestFile(t, source, []byte("package api\ntype SecurityHandler interface { HandleOld() }\n"))
 	if err := Run(args); err != nil {
@@ -96,13 +98,19 @@ func TestRunReplacesOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"package auth", "func NewStub() *Stub", "func (*Stub) HandleNew()", `panic("HandleNew: not implemented")`} {
+	for _, want := range []string{"package auth", "func NewStub() *handler", "func (*handler) HandleNew()", `panic("HandleNew: not implemented")`} {
 		if !strings.Contains(string(code), want) {
 			t.Errorf("output is missing %q", want)
 		}
 	}
 	if strings.Contains(string(code), "HandleOld") {
 		t.Fatal("obsolete method was retained")
+	}
+	if err := Run(append(append([]string(nil), args...), "-type", "Handler")); err == nil {
+		t.Fatal("removed -type option was accepted")
+	}
+	if err := Run(append(append([]string(nil), args[:len(args)-1]...), "handler")); err == nil {
+		t.Fatal("constructor name collided with the private handler type")
 	}
 
 	for _, invalid := range []string{

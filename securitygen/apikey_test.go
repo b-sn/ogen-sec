@@ -76,7 +76,7 @@ func TestGenerateAPIKeyDetection(t *testing.T) {
 			typesSource := "package api\n" + tc.declaration + "\n"
 			cfg := config{
 				source: filepath.Join(dir, "security.go"), output: filepath.Join(dir, "out", "security.go"),
-				apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler",
+				apiImport: "example.test/api", packageName: "security", constructor: "NewHandler",
 			}
 			writeTestFile(t, cfg.source, []byte(source))
 			writeTestFile(t, filepath.Join(dir, "models.go"), []byte(typesSource))
@@ -140,7 +140,7 @@ func runGeneratedFixture(t *testing.T, fixtureName string) {
 	}
 	if err := Run([]string{
 		"-source", filepath.Join(apiDir, "oas_security_gen.go"), "-output", filepath.Join(dir, "security.go"),
-		"-api-import", "example.test/generated/api", "-type", "Handler", "-constructor", "NewHandler",
+		"-api-import", "example.test/generated/api", "-constructor", "NewHandler",
 	}); err != nil {
 		t.Fatal(err)
 	}

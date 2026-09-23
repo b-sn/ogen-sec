@@ -53,7 +53,7 @@ func APIKeyIdentityFromContext(ctx context.Context, scheme string) (APIKeyIdenti
 	return identity, ok
 }
 
-func (s *Handler) authorizeAPIKey(ctx context.Context, scheme, key string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeAPIKey(ctx context.Context, scheme, key string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -134,7 +134,7 @@ func BasicAuthIdentityFromContext(ctx context.Context, scheme string) (BasicAuth
 	return identity, ok
 }
 
-func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, password string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeBasicAuth(ctx context.Context, scheme, username, password string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -156,15 +156,9 @@ func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, pass
 		// requests a dummy password check and cannot authorize the request.
 		record = BasicAuthRecord{}
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
 	valid, err := s.passwords.VerifyPassword(ctx, record.PasswordHash, password)
 	if err != nil {
 		return ctx, fmt.Errorf("verify basic auth password: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
 	}
 	if !valid || record.PasswordHash == "" || record.Disabled {
 		return ctx, ErrInvalidBasicAuth
@@ -183,27 +177,16 @@ func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, pass
 
 // BearerTokenVerifier authenticates a token within a scheme's trust boundary.
 // scheme is the Go credential type name, not the operation name. Return
-// ErrInvalidBearerToken for invalid or unknown tokens. Only verified, trusted
-// identity information may be returned, with Active explicitly set to true.
+// ErrInvalidBearerToken for invalid or unknown tokens, including inactive,
+// revoked, expired or not-yet-valid tokens. Return only verified, trusted
+// identity information.
 // JWT implementations must verify signatures using allowed algorithms and
 // trusted keys, and validate the expected issuer, audience and required claims.
 // Opaque token implementations must use a trusted store or introspection service.
 // Implementations must be safe for concurrent use, honor context cancellation,
 // and never log raw tokens or include them in errors.
 type BearerTokenVerifier interface {
-	VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error)
-}
-
-// BearerTokenRecord contains verified token information, never the raw token.
-// Active must be false for revoked/inactive tokens; the zero record rejects access.
-// Zero NotBefore/ExpiresAt values mean no corresponding time restriction. A
-// verifier must enforce any requirement for these claims before returning.
-type BearerTokenRecord struct {
-	Active    bool
-	Subject   string
-	Roles     []string
-	NotBefore time.Time
-	ExpiresAt time.Time
+	VerifyBearerToken(ctx context.Context, scheme, token string) (subject string, roles []string, err error)
 }
 
 var (
@@ -227,7 +210,7 @@ func BearerAuthIdentityFromContext(ctx context.Context, scheme string) (BearerAu
 	return identity, ok
 }
 
-func (s *Handler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -237,29 +220,16 @@ func (s *Handler) authorizeBearerAuth(ctx context.Context, scheme, token string,
 	if s.bearerTokens == nil {
 		return ctx, ErrBearerTokenVerifierNotConfigured
 	}
-	record, err := s.bearerTokens.VerifyBearerToken(ctx, scheme, token)
+	subject, roles, err := s.bearerTokens.VerifyBearerToken(ctx, scheme, token)
 	if err != nil {
 		return ctx, fmt.Errorf("verify bearer token: %w", err)
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
-	if !record.Active {
-		return ctx, ErrInvalidBearerToken
-	}
-	now := time.Now()
-	if !record.NotBefore.IsZero() && now.Before(record.NotBefore) {
-		return ctx, ErrInvalidBearerToken
-	}
-	if !record.ExpiresAt.IsZero() && !now.Before(record.ExpiresAt) {
-		return ctx, ErrInvalidBearerToken
-	}
 	for _, role := range requiredRoles {
-		if !slices.Contains(record.Roles, role) {
+		if !slices.Contains(roles, role) {
 			return ctx, ErrBearerAuthForbidden
 		}
 	}
-	identity := BearerAuthIdentity{Subject: record.Subject, Roles: slices.Clone(record.Roles)}
+	identity := BearerAuthIdentity{Subject: subject, Roles: slices.Clone(roles)}
 	return context.WithValue(ctx, bearerAuthContextKey{scheme: scheme}, identity), nil
 }
 
@@ -314,7 +284,7 @@ func OAuth2IdentityFromContext(ctx context.Context, scheme string) (OAuth2Identi
 	return identity, ok
 }
 
-func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, requiredScopes []string) (context.Context, error) {
+func (s *handler) authorizeOAuth2(ctx context.Context, scheme, token string, requiredScopes []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -327,9 +297,6 @@ func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, req
 	record, err := s.oauth2Tokens.VerifyOAuth2Token(ctx, scheme, token)
 	if err != nil {
 		return ctx, fmt.Errorf("verify OAuth2 access token: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
 	}
 	if !record.Active {
 		return ctx, ErrInvalidOAuth2Token
@@ -350,8 +317,8 @@ func (s *Handler) authorizeOAuth2(ctx context.Context, scheme, token string, req
 	return context.WithValue(ctx, oauth2ContextKey{scheme: scheme}, identity), nil
 }
 
-// Handler implements api.SecurityHandler. Unsupported schemes remain stubs.
-type Handler struct {
+// handler implements api.SecurityHandler. Unsupported schemes remain stubs.
+type handler struct {
 	apiKeys      APIKeyStore
 	basicAuth    BasicAuthStore
 	passwords    PasswordVerifier
@@ -360,43 +327,43 @@ type Handler struct {
 }
 
 // NewHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewHandler(apiKeys APIKeyStore, basicAuth BasicAuthStore, passwords PasswordVerifier, bearerTokens BearerTokenVerifier, oauth2Tokens OAuth2TokenVerifier) *Handler {
-	return &Handler{apiKeys: apiKeys, basicAuth: basicAuth, passwords: passwords, bearerTokens: bearerTokens, oauth2Tokens: oauth2Tokens}
+func NewHandler(apiKeys APIKeyStore, basicAuth BasicAuthStore, passwords PasswordVerifier, bearerTokens BearerTokenVerifier, oauth2Tokens OAuth2TokenVerifier) *handler {
+	return &handler{apiKeys: apiKeys, basicAuth: basicAuth, passwords: passwords, bearerTokens: bearerTokens, oauth2Tokens: oauth2Tokens}
 }
 
-var _ api.SecurityHandler = (*Handler)(nil)
+var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleApiKeyCookieM2xJf implements api.SecurityHandler.
-func (s *Handler) HandleApiKeyCookieM2xJf(ctx context.Context, _ api.OperationName, credentials api.ApiKeyCookieM2xJf) (context.Context, error) {
+func (s *handler) HandleApiKeyCookieM2xJf(ctx context.Context, _ api.OperationName, credentials api.ApiKeyCookieM2xJf) (context.Context, error) {
 	return s.authorizeAPIKey(ctx, "ApiKeyCookieM2xJf", credentials.APIKey, credentials.Roles)
 }
 
 // HandleApiKeyHeaderA3nKs implements api.SecurityHandler.
-func (s *Handler) HandleApiKeyHeaderA3nKs(ctx context.Context, _ api.OperationName, credentials api.ApiKeyHeaderA3nKs) (context.Context, error) {
+func (s *handler) HandleApiKeyHeaderA3nKs(ctx context.Context, _ api.OperationName, credentials api.ApiKeyHeaderA3nKs) (context.Context, error) {
 	return s.authorizeAPIKey(ctx, "ApiKeyHeaderA3nKs", credentials.APIKey, credentials.Roles)
 }
 
 // HandleApiKeyQueryC8rVw implements api.SecurityHandler.
-func (s *Handler) HandleApiKeyQueryC8rVw(ctx context.Context, _ api.OperationName, credentials api.ApiKeyQueryC8rVw) (context.Context, error) {
+func (s *handler) HandleApiKeyQueryC8rVw(ctx context.Context, _ api.OperationName, credentials api.ApiKeyQueryC8rVw) (context.Context, error) {
 	return s.authorizeAPIKey(ctx, "ApiKeyQueryC8rVw", credentials.APIKey, credentials.Roles)
 }
 
 // HandleBasicAuthF5wJz implements api.SecurityHandler.
-func (s *Handler) HandleBasicAuthF5wJz(ctx context.Context, _ api.OperationName, credentials api.BasicAuthF5wJz) (context.Context, error) {
+func (s *handler) HandleBasicAuthF5wJz(ctx context.Context, _ api.OperationName, credentials api.BasicAuthF5wJz) (context.Context, error) {
 	return s.authorizeBasicAuth(ctx, "BasicAuthF5wJz", credentials.Username, credentials.Password, credentials.Roles)
 }
 
 // HandleBearerAuthV6qPt implements api.SecurityHandler.
-func (s *Handler) HandleBearerAuthV6qPt(ctx context.Context, _ api.OperationName, credentials api.BearerAuthV6qPt) (context.Context, error) {
+func (s *handler) HandleBearerAuthV6qPt(ctx context.Context, _ api.OperationName, credentials api.BearerAuthV6qPt) (context.Context, error) {
 	return s.authorizeBearerAuth(ctx, "BearerAuthV6qPt", credentials.Token, credentials.Roles)
 }
 
 // HandleOAuth2N4kXb implements api.SecurityHandler.
-func (s *Handler) HandleOAuth2N4kXb(ctx context.Context, _ api.OperationName, credentials api.OAuth2N4kXb) (context.Context, error) {
+func (s *handler) HandleOAuth2N4kXb(ctx context.Context, _ api.OperationName, credentials api.OAuth2N4kXb) (context.Context, error) {
 	return s.authorizeOAuth2(ctx, "OAuth2N4kXb", credentials.Token, credentials.Scopes)
 }
 
 // HandleReferencedBearerAuthZ8yHd implements api.SecurityHandler.
-func (s *Handler) HandleReferencedBearerAuthZ8yHd(ctx context.Context, _ api.OperationName, credentials api.ReferencedBearerAuthZ8yHd) (context.Context, error) {
+func (s *handler) HandleReferencedBearerAuthZ8yHd(ctx context.Context, _ api.OperationName, credentials api.ReferencedBearerAuthZ8yHd) (context.Context, error) {
 	return s.authorizeBearerAuth(ctx, "ReferencedBearerAuthZ8yHd", credentials.Token, credentials.Roles)
 }

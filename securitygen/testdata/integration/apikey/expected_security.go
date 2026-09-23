@@ -53,7 +53,7 @@ func APIKeyIdentityFromContext(ctx context.Context, scheme string) (APIKeyIdenti
 	return identity, ok
 }
 
-func (s *Handler) authorizeAPIKey(ctx context.Context, scheme, key string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeAPIKey(ctx context.Context, scheme, key string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -83,19 +83,19 @@ func (s *Handler) authorizeAPIKey(ctx context.Context, scheme, key string, requi
 	return context.WithValue(ctx, apiKeyContextKey{scheme: scheme}, identity), nil
 }
 
-// Handler implements api.SecurityHandler. Unsupported schemes remain stubs.
-type Handler struct {
+// handler implements api.SecurityHandler. Unsupported schemes remain stubs.
+type handler struct {
 	apiKeys APIKeyStore
 }
 
 // NewHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewHandler(apiKeys APIKeyStore) *Handler {
-	return &Handler{apiKeys: apiKeys}
+func NewHandler(apiKeys APIKeyStore) *handler {
+	return &handler{apiKeys: apiKeys}
 }
 
-var _ api.SecurityHandler = (*Handler)(nil)
+var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetKey implements api.SecurityHandler.
-func (s *Handler) HandleWidgetKey(ctx context.Context, _ api.OperationName, credentials api.WidgetKey) (context.Context, error) {
+func (s *handler) HandleWidgetKey(ctx context.Context, _ api.OperationName, credentials api.WidgetKey) (context.Context, error) {
 	return s.authorizeAPIKey(ctx, "WidgetKey", credentials.APIKey, credentials.Roles)
 }

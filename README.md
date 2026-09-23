@@ -27,7 +27,7 @@ place a `go:generate` directive in the package that should contain the handler:
 ```go
 package security
 
-//go:generate go run github.com/b-sn/ogen-sec/cmd/securitygen@v0.1.0 -source ../api/oas_security_gen.go -output security.go -api-import example.com/project/internal/api -package security -type Handler -constructor NewHandler
+//go:generate go run github.com/b-sn/ogen-sec/cmd/securitygen@v0.2.0 -source ../api/oas_security_gen.go -output security.go -api-import example.com/project/internal/api -package security -constructor NewHandler
 ```
 
 Run it after every ogen generation:
@@ -37,7 +37,7 @@ go generate ./internal/security
 ```
 
 `security.go` is generated output and is replaced in full on every run; do not
-edit it manually. The example is pinned to the current release, `v0.1.0`.
+edit it manually. The example is pinned to the current release, `v0.2.0`.
 Use a newer release tag or a reviewed commit when upgrading this dependency.
 
 If the OpenAPI document has no security schemes, ogen does not emit
@@ -66,7 +66,9 @@ handler := security.NewHandler(apiKeys, basicAuth, passwords, bearerTokens, oaut
 The generated dependency interfaces are deliberately application-owned. For
 example, `APIKeyStore` receives a SHA-256 hash rather than the raw key, and a
 Bearer or OAuth2 verifier is responsible for returning only trusted identity
-data. Read the generated interface comments before implementing them.
+data. The Bearer verifier returns `(subject string, roles []string, err error)`
+and rejects inactive, revoked, expired or not-yet-valid tokens itself. Read the
+generated interface comments before implementing these dependencies.
 
 Methods whose credential shape is not supported remain explicit
 `panic("<method>: not implemented")` stubs. Treat those as a deployment blocker:
@@ -83,7 +85,6 @@ Required:
 Optional:
 
 - `-package`: destination package name; default `security`
-- `-type`: generated struct name; default `passthroughSecurityHandler`
 - `-constructor`: constructor name; default `NewPassthroughSecurityHandler`
 
 The generator parses the source package directly and does not require the API

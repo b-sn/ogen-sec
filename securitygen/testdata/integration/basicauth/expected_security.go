@@ -62,7 +62,7 @@ func BasicAuthIdentityFromContext(ctx context.Context, scheme string) (BasicAuth
 	return identity, ok
 }
 
-func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, password string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeBasicAuth(ctx context.Context, scheme, username, password string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -84,15 +84,9 @@ func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, pass
 		// requests a dummy password check and cannot authorize the request.
 		record = BasicAuthRecord{}
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
 	valid, err := s.passwords.VerifyPassword(ctx, record.PasswordHash, password)
 	if err != nil {
 		return ctx, fmt.Errorf("verify basic auth password: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
 	}
 	if !valid || record.PasswordHash == "" || record.Disabled {
 		return ctx, ErrInvalidBasicAuth
@@ -109,20 +103,20 @@ func (s *Handler) authorizeBasicAuth(ctx context.Context, scheme, username, pass
 	return context.WithValue(ctx, basicAuthContextKey{scheme: scheme}, identity), nil
 }
 
-// Handler implements api.SecurityHandler. Unsupported schemes remain stubs.
-type Handler struct {
+// handler implements api.SecurityHandler. Unsupported schemes remain stubs.
+type handler struct {
 	basicAuth BasicAuthStore
 	passwords PasswordVerifier
 }
 
 // NewHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewHandler(basicAuth BasicAuthStore, passwords PasswordVerifier) *Handler {
-	return &Handler{basicAuth: basicAuth, passwords: passwords}
+func NewHandler(basicAuth BasicAuthStore, passwords PasswordVerifier) *handler {
+	return &handler{basicAuth: basicAuth, passwords: passwords}
 }
 
-var _ api.SecurityHandler = (*Handler)(nil)
+var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetLogin implements api.SecurityHandler.
-func (s *Handler) HandleWidgetLogin(ctx context.Context, _ api.OperationName, credentials api.WidgetLogin) (context.Context, error) {
+func (s *handler) HandleWidgetLogin(ctx context.Context, _ api.OperationName, credentials api.WidgetLogin) (context.Context, error) {
 	return s.authorizeBasicAuth(ctx, "WidgetLogin", credentials.Username, credentials.Password, credentials.Roles)
 }

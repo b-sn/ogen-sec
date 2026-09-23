@@ -68,7 +68,7 @@ func TestGenerateBasicAuthDetection(t *testing.T) {
 			models := "package api\n" + tc.declaration + "\n"
 			cfg := config{
 				source: filepath.Join(dir, "security.go"), output: filepath.Join(dir, "out", "security.go"),
-				apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler",
+				apiImport: "example.test/api", packageName: "security", constructor: "NewHandler",
 			}
 			writeTestFile(t, cfg.source, []byte(source))
 			writeTestFile(t, filepath.Join(dir, "models.go"), []byte(models))
@@ -125,7 +125,7 @@ func TestConstructorDependencies(t *testing.T) {
 			}
 			source += "type Key struct { APIKey string }; type Login struct { Username, Password string }; type OtherLogin = Login\n"
 			source += "type SecurityHandler interface { " + tc.methods + " }\n"
-			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler"}
+			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", constructor: "NewHandler"}
 			writeTestFile(t, cfg.source, []byte(source))
 			code, err := generate(cfg)
 			if err != nil {

@@ -12,9 +12,9 @@ import (
 	"example.test/generated/api"
 )
 
-type verifierFunc func(context.Context, string, string) (BearerTokenRecord, error)
+type verifierFunc func(context.Context, string, string) (string, []string, error)
 
-func (f verifierFunc) VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error) {
+func (f verifierFunc) VerifyBearerToken(ctx context.Context, scheme, token string) (string, []string, error) {
 	return f(ctx, scheme, token)
 }
 
@@ -24,7 +24,6 @@ func TestBearerAuth(t *testing.T) {
 		name                              string
 		required                          []string
 		emptyToken, nilVerifier, inactive bool
-		zeroRecord                        bool
 		notBefore, expires                time.Time
 		verifyErr, wantErr                error
 		cancelAt                          string
@@ -35,11 +34,10 @@ func TestBearerAuth(t *testing.T) {
 		{name: "valid within time window", notBefore: time.Now().Add(-time.Hour), expires: time.Now().Add(time.Hour)},
 		{name: "empty token", emptyToken: true, wantErr: ErrInvalidBearerToken},
 		{name: "nil verifier", nilVerifier: true, wantErr: ErrBearerTokenVerifierNotConfigured},
-		{name: "invalid token despite returned record", verifyErr: ErrInvalidBearerToken, wantErr: ErrInvalidBearerToken},
+		{name: "invalid token despite returned identity", verifyErr: ErrInvalidBearerToken, wantErr: ErrInvalidBearerToken},
 		{name: "wrapped invalid token", verifyErr: fmt.Errorf("bad signature: %w", ErrInvalidBearerToken), wantErr: ErrInvalidBearerToken},
-		{name: "verifier failure despite returned record", verifyErr: verifyError, wantErr: verifyError},
+		{name: "verifier failure despite returned identity", verifyErr: verifyError, wantErr: verifyError},
 		{name: "inactive or revoked", inactive: true, wantErr: ErrInvalidBearerToken},
-		{name: "zero record is not authenticated", zeroRecord: true, wantErr: ErrInvalidBearerToken},
 		{name: "not yet valid", notBefore: time.Now().Add(time.Hour), wantErr: ErrInvalidBearerToken},
 		{name: "expired", expires: time.Now().Add(-time.Hour), wantErr: ErrInvalidBearerToken},
 		{name: "missing role", required: []string{"write"}, wantErr: ErrBearerAuthForbidden},
@@ -54,32 +52,34 @@ func TestBearerAuth(t *testing.T) {
 			if tc.cancelAt == "before" {
 				cancel()
 			}
-			record := BearerTokenRecord{
-				Active: !tc.inactive, Subject: "user-42", Roles: []string{"read", "admin"},
-				NotBefore: tc.notBefore, ExpiresAt: tc.expires,
-			}
-			if tc.zeroRecord {
-				record = BearerTokenRecord{}
-			}
+			subject, roles := "user-42", []string{"read", "admin"}
 			credentials := api.CredentialXYZ{Token: "secret-opaque-token", Roles: tc.required}
 			if tc.emptyToken {
 				credentials.Token = ""
 			}
 			calls := 0
-			var verifier BearerTokenVerifier = verifierFunc(func(got context.Context, scheme, token string) (BearerTokenRecord, error) {
+			var verifier BearerTokenVerifier = verifierFunc(func(got context.Context, scheme, token string) (string, []string, error) {
 				calls++
 				if got != ctx || scheme != "CredentialXYZ" || token != credentials.Token {
 					t.Fatal("incorrect token verification arguments")
 				}
 				if tc.cancelAt == "verify" {
 					cancel()
+					return subject, roles, got.Err()
 				}
-				return record, tc.verifyErr
+				if tc.verifyErr != nil {
+					return subject, roles, tc.verifyErr
+				}
+				now := time.Now()
+				if tc.inactive || !tc.notBefore.IsZero() && now.Before(tc.notBefore) || !tc.expires.IsZero() && !now.Before(tc.expires) {
+					return "", nil, ErrInvalidBearerToken
+				}
+				return subject, roles, nil
 			})
 			if tc.nilVerifier {
 				verifier = nil
 			}
-			required, granted := slices.Clone(tc.required), slices.Clone(record.Roles)
+			required, granted := slices.Clone(tc.required), slices.Clone(roles)
 			result, err := NewHandler(verifier).HandleToken(ctx, "operation", credentials)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tc.wantErr)
@@ -94,7 +94,7 @@ func TestBearerAuth(t *testing.T) {
 			if calls != wantCalls {
 				t.Fatalf("verification calls = %d, want %d", calls, wantCalls)
 			}
-			if !slices.Equal(tc.required, required) || !slices.Equal(record.Roles, granted) {
+			if !slices.Equal(tc.required, required) || !slices.Equal(roles, granted) {
 				t.Fatal("authorization mutated role slices")
 			}
 			if result == nil || result.Value(marker{}) != "preserved" {
@@ -107,10 +107,10 @@ func TestBearerAuth(t *testing.T) {
 				}
 				return
 			}
-			if !ok || identity.Subject != record.Subject || !slices.Equal(identity.Roles, record.Roles) {
+			if !ok || identity.Subject != subject || !slices.Equal(identity.Roles, roles) {
 				t.Fatalf("unexpected identity: %+v, found %v", identity, ok)
 			}
-			record.Roles[0] = "changed by verifier"
+			roles[0] = "changed by verifier"
 			identity.Roles[1] = "changed by caller"
 			again, _ := BearerAuthIdentityFromContext(result, "CredentialXYZ")
 			if !slices.Equal(again.Roles, []string{"read", "admin"}) {
@@ -122,12 +122,12 @@ func TestBearerAuth(t *testing.T) {
 
 func TestBearerSchemesAndCredentialShapes(t *testing.T) {
 	var schemes []string
-	h := NewHandler(verifierFunc(func(_ context.Context, scheme, token string) (BearerTokenRecord, error) {
+	h := NewHandler(verifierFunc(func(_ context.Context, scheme, token string) (string, []string, error) {
 		schemes = append(schemes, scheme)
 		if token != "opaque-token" {
-			return BearerTokenRecord{}, ErrInvalidBearerToken
+			return "", nil, ErrInvalidBearerToken
 		}
-		return BearerTokenRecord{Active: true, Subject: scheme, Roles: []string{"read"}}, nil
+		return scheme, []string{"read"}, nil
 	}))
 	ctx := context.Background()
 	ctx, err := h.HandleToken(ctx, "operation-1", api.CredentialXYZ{Token: "opaque-token", Roles: []string{"read"}})

@@ -8,32 +8,20 @@ import (
 	api "example.test/generated/api"
 	fmt "fmt"
 	slices "slices"
-	time "time"
 )
 
 // BearerTokenVerifier authenticates a token within a scheme's trust boundary.
 // scheme is the Go credential type name, not the operation name. Return
-// ErrInvalidBearerToken for invalid or unknown tokens. Only verified, trusted
-// identity information may be returned, with Active explicitly set to true.
+// ErrInvalidBearerToken for invalid or unknown tokens, including inactive,
+// revoked, expired or not-yet-valid tokens. Return only verified, trusted
+// identity information.
 // JWT implementations must verify signatures using allowed algorithms and
 // trusted keys, and validate the expected issuer, audience and required claims.
 // Opaque token implementations must use a trusted store or introspection service.
 // Implementations must be safe for concurrent use, honor context cancellation,
 // and never log raw tokens or include them in errors.
 type BearerTokenVerifier interface {
-	VerifyBearerToken(ctx context.Context, scheme, token string) (BearerTokenRecord, error)
-}
-
-// BearerTokenRecord contains verified token information, never the raw token.
-// Active must be false for revoked/inactive tokens; the zero record rejects access.
-// Zero NotBefore/ExpiresAt values mean no corresponding time restriction. A
-// verifier must enforce any requirement for these claims before returning.
-type BearerTokenRecord struct {
-	Active    bool
-	Subject   string
-	Roles     []string
-	NotBefore time.Time
-	ExpiresAt time.Time
+	VerifyBearerToken(ctx context.Context, scheme, token string) (subject string, roles []string, err error)
 }
 
 var (
@@ -57,7 +45,7 @@ func BearerAuthIdentityFromContext(ctx context.Context, scheme string) (BearerAu
 	return identity, ok
 }
 
-func (s *Handler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
+func (s *handler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
@@ -67,45 +55,32 @@ func (s *Handler) authorizeBearerAuth(ctx context.Context, scheme, token string,
 	if s.bearerTokens == nil {
 		return ctx, ErrBearerTokenVerifierNotConfigured
 	}
-	record, err := s.bearerTokens.VerifyBearerToken(ctx, scheme, token)
+	subject, roles, err := s.bearerTokens.VerifyBearerToken(ctx, scheme, token)
 	if err != nil {
 		return ctx, fmt.Errorf("verify bearer token: %w", err)
 	}
-	if err := ctx.Err(); err != nil {
-		return ctx, err
-	}
-	if !record.Active {
-		return ctx, ErrInvalidBearerToken
-	}
-	now := time.Now()
-	if !record.NotBefore.IsZero() && now.Before(record.NotBefore) {
-		return ctx, ErrInvalidBearerToken
-	}
-	if !record.ExpiresAt.IsZero() && !now.Before(record.ExpiresAt) {
-		return ctx, ErrInvalidBearerToken
-	}
 	for _, role := range requiredRoles {
-		if !slices.Contains(record.Roles, role) {
+		if !slices.Contains(roles, role) {
 			return ctx, ErrBearerAuthForbidden
 		}
 	}
-	identity := BearerAuthIdentity{Subject: record.Subject, Roles: slices.Clone(record.Roles)}
+	identity := BearerAuthIdentity{Subject: subject, Roles: slices.Clone(roles)}
 	return context.WithValue(ctx, bearerAuthContextKey{scheme: scheme}, identity), nil
 }
 
-// Handler implements api.SecurityHandler. Unsupported schemes remain stubs.
-type Handler struct {
+// handler implements api.SecurityHandler. Unsupported schemes remain stubs.
+type handler struct {
 	bearerTokens BearerTokenVerifier
 }
 
 // NewHandler creates a security handler. Nil dependencies reject requests for their schemes.
-func NewHandler(bearerTokens BearerTokenVerifier) *Handler {
-	return &Handler{bearerTokens: bearerTokens}
+func NewHandler(bearerTokens BearerTokenVerifier) *handler {
+	return &handler{bearerTokens: bearerTokens}
 }
 
-var _ api.SecurityHandler = (*Handler)(nil)
+var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetBearer implements api.SecurityHandler.
-func (s *Handler) HandleWidgetBearer(ctx context.Context, _ api.OperationName, credentials api.WidgetBearer) (context.Context, error) {
+func (s *handler) HandleWidgetBearer(ctx context.Context, _ api.OperationName, credentials api.WidgetBearer) (context.Context, error) {
 	return s.authorizeBearerAuth(ctx, "WidgetBearer", credentials.Token, credentials.Roles)
 }

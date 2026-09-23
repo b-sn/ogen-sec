@@ -71,7 +71,7 @@ func TestGenerateBearerAuthDetection(t *testing.T) {
 			models := "package api\n" + tc.declaration + "\n"
 			cfg := config{
 				source: filepath.Join(dir, "security.go"), output: filepath.Join(dir, "out", "security.go"),
-				apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler",
+				apiImport: "example.test/api", packageName: "security", constructor: "NewHandler",
 			}
 			writeTestFile(t, cfg.source, []byte(source))
 			writeTestFile(t, filepath.Join(dir, "models.go"), []byte(models))
@@ -85,6 +85,9 @@ func TestGenerateBearerAuthDetection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if bytes.Contains(code, []byte("BearerTokenRecord")) {
+				t.Fatal("Bearer token record should not be generated")
+			}
 			assertImplementationCompiles(t, cfg, code, source, models)
 			if tc.stub {
 				if bytes.Contains(code, []byte("BearerTokenVerifier")) || !bytes.Contains(code, []byte("func NewHandler()")) || !bytes.Contains(code, []byte(": not implemented")) {
@@ -96,7 +99,7 @@ func TestGenerateBearerAuthDetection(t *testing.T) {
 				}
 			} else {
 				for _, want := range []string{
-					"type BearerTokenVerifier interface", "func NewHandler(bearerTokens BearerTokenVerifier)",
+					"type BearerTokenVerifier interface", "VerifyBearerToken(ctx context.Context, scheme, token string) (subject string, roles []string, err error)", "func NewHandler(bearerTokens BearerTokenVerifier)",
 					`s.authorizeBearerAuth(ctx, "CredentialXYZ", credentials.Token,`,
 				} {
 					if !bytes.Contains(code, []byte(want)) {
@@ -142,7 +145,7 @@ type Token struct { Token string; Roles []string }
 type OtherToken = Token
 type OAuth struct { Token string; Scopes []string }
 type SecurityHandler interface { ` + tc.methods + " }\n"
-			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", typeName: "Handler", constructor: "NewHandler"}
+			cfg := config{source: filepath.Join(t.TempDir(), "source.go"), apiImport: "example.test/api", packageName: "security", constructor: "NewHandler"}
 			writeTestFile(t, cfg.source, []byte(source))
 			code, err := generate(cfg)
 			if err != nil {

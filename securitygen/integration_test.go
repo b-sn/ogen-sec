@@ -79,7 +79,6 @@ func TestGenerateFromOpenAPIFixtures(t *testing.T) {
 				"-output", output,
 				"-api-import", "example.test/generated/api",
 				"-package", "security",
-				"-type", "Handler",
 				"-constructor", "NewHandler",
 			}); err != nil {
 				t.Fatal(err)
