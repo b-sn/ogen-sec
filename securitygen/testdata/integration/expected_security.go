@@ -212,12 +212,19 @@ type BearerAuthIdentity struct {
 }
 
 type bearerAuthContextKey struct{ scheme string }
+type bearerTokenContextKey struct{ scheme string }
 
 // BearerAuthIdentityFromContext returns the identity authenticated for a scheme.
 func BearerAuthIdentityFromContext(ctx context.Context, scheme string) (BearerAuthIdentity, bool) {
 	identity, ok := ctx.Value(bearerAuthContextKey{scheme: scheme}).(BearerAuthIdentity)
 	identity.Roles = slices.Clone(identity.Roles)
 	return identity, ok
+}
+
+// BearerTokenFromContext returns the verified bearer token authenticated for a scheme.
+func BearerTokenFromContext(ctx context.Context, scheme string) (string, bool) {
+	token, ok := ctx.Value(bearerTokenContextKey{scheme: scheme}).(string)
+	return token, ok
 }
 
 func (s *handler) authorizeBearerAuth(ctx context.Context, scheme, token string, requiredRoles []string) (context.Context, error) {
@@ -240,7 +247,9 @@ func (s *handler) authorizeBearerAuth(ctx context.Context, scheme, token string,
 		}
 	}
 	identity := BearerAuthIdentity{Subject: subject, Roles: slices.Clone(roles)}
-	return context.WithValue(ctx, bearerAuthContextKey{scheme: scheme}, identity), nil
+	ctx = context.WithValue(ctx, bearerAuthContextKey{scheme: scheme}, identity)
+	ctx = context.WithValue(ctx, bearerTokenContextKey{scheme: scheme}, token)
+	return ctx, nil
 }
 
 // OAuth2TokenVerifier authenticates an access token for this resource server.

@@ -100,6 +100,7 @@ func TestGenerateBearerAuthDetection(t *testing.T) {
 			} else {
 				for _, want := range []string{
 					"type BearerTokenVerifier interface", "VerifyBearerToken(ctx context.Context, scheme, token string) (subject string, roles []string, err error)", "func NewHandler(bearerTokens BearerTokenVerifier)",
+					`func BearerTokenFromContext(ctx context.Context, scheme string) (string, bool)`,
 					`CredentialXYZScheme = "CredentialXYZ"`,
 					`s.authorizeBearerAuth(ctx, CredentialXYZScheme, credentials.Token,`,
 				} {

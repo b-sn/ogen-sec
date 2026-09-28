@@ -69,8 +69,8 @@ var supportedSchemes = []schemeSupport{
 		kind: bearerAuthKind,
 		name: "Bearer auth",
 		declarations: []string{
-			"BearerTokenVerifier", "BearerAuthIdentity", "BearerAuthIdentityFromContext",
-			"bearerAuthContextKey", "ErrInvalidBearerToken", "ErrBearerAuthForbidden", "ErrBearerTokenVerifierNotConfigured",
+			"BearerTokenVerifier", "BearerAuthIdentity", "BearerAuthIdentityFromContext", "BearerTokenFromContext",
+			"bearerAuthContextKey", "bearerTokenContextKey", "ErrInvalidBearerToken", "ErrBearerAuthForbidden", "ErrBearerTokenVerifierNotConfigured",
 		},
 		dependencies: []dependency{{field: "bearerTokens", typ: "BearerTokenVerifier"}},
 		imports: map[string]string{

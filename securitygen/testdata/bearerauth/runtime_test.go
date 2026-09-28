@@ -101,14 +101,18 @@ func TestBearerAuth(t *testing.T) {
 				t.Fatal("original context was lost")
 			}
 			identity, ok := BearerAuthIdentityFromContext(result, "CredentialXYZ")
+			token, tokenOK := BearerTokenFromContext(result, "CredentialXYZ")
 			if tc.wantErr != nil {
-				if ok || result != ctx {
+				if ok || tokenOK || result != ctx {
 					t.Fatal("failed authorization changed the context")
 				}
 				return
 			}
 			if !ok || identity.Subject != subject || !slices.Equal(identity.Roles, roles) {
 				t.Fatalf("unexpected identity: %+v, found %v", identity, ok)
+			}
+			if !tokenOK || token != credentials.Token {
+				t.Fatalf("unexpected token: %q, found %v", token, tokenOK)
 			}
 			roles[0] = "changed by verifier"
 			identity.Roles[1] = "changed by caller"
@@ -155,9 +159,16 @@ func TestBearerSchemesAndCredentialShapes(t *testing.T) {
 		if !ok || identity.Subject != scheme {
 			t.Fatalf("identity for %s was lost", scheme)
 		}
+		token, ok := BearerTokenFromContext(ctx, scheme)
+		if !ok || token != "opaque-token" {
+			t.Fatalf("token for %s was lost", scheme)
+		}
 	}
 	if _, ok := BearerAuthIdentityFromContext(ctx, "missing"); ok {
 		t.Fatal("unexpected identity for unknown scheme")
+	}
+	if _, ok := BearerTokenFromContext(ctx, "missing"); ok {
+		t.Fatal("unexpected token for unknown scheme")
 	}
 	// An identity from an earlier success must not bypass verification or the
 	// current operation's role requirements.
