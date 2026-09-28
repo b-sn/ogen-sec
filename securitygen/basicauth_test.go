@@ -86,7 +86,8 @@ func TestGenerateBasicAuthDetection(t *testing.T) {
 			for _, want := range []string{
 				"type BasicAuthStore interface", "type PasswordVerifier interface",
 				"func NewHandler(basicAuth BasicAuthStore, passwords PasswordVerifier)",
-				`s.authorizeBasicAuth(ctx, "LoginXYZ", credentials.Username, credentials.Password,`,
+				`LoginXYZScheme = "LoginXYZ"`,
+				`s.authorizeBasicAuth(ctx, LoginXYZScheme, credentials.Username, credentials.Password,`,
 			} {
 				if !bytes.Contains(code, []byte(want)) {
 					t.Errorf("missing %q", want)

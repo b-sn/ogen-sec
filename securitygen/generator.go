@@ -28,6 +28,10 @@ type config struct {
 	constructor string
 }
 
+func schemeConstName(scheme string) string {
+	return scheme + "Scheme"
+}
+
 // Run parses command-line arguments and writes the generated implementation.
 // It returns flag.ErrHelp when help is requested.
 func Run(args []string) error {
@@ -131,6 +135,8 @@ func generate(cfg config) ([]byte, error) {
 		return nil, err
 	}
 	securityMethods := make(map[string]*securityMethod)
+	schemeConstants := make(map[string]string)
+	var schemeOrder []string
 	kinds := make(map[securityKind]bool)
 	for _, method := range handler.Methods.List {
 		signature, ok := method.Type.(*ast.FuncType)
@@ -144,11 +150,22 @@ func generate(cfg config) ([]byte, error) {
 		}
 		if security != nil {
 			securityMethods[name] = security
+			if _, ok := schemeConstants[security.scheme]; !ok {
+				schemeConstants[security.scheme] = schemeConstName(security.scheme)
+				schemeOrder = append(schemeOrder, security.scheme)
+			}
 			kinds[security.kind] = true
 		}
 	}
 	var support []byte
 	var dependencies []dependency
+	for _, scheme := range schemeOrder {
+		name := schemeConstants[scheme]
+		if q.reserved[name] {
+			return nil, fmt.Errorf("generated identifier %s conflicts with scheme name constant", name)
+		}
+		q.reserved[name] = true
+	}
 	for _, scheme := range supportedSchemes {
 		if !kinds[scheme.kind] {
 			continue
@@ -172,6 +189,15 @@ func generate(cfg config) ([]byte, error) {
 			return nil, err
 		}
 		support = append(support, code...)
+	}
+
+	var schemeNames bytes.Buffer
+	if len(schemeOrder) != 0 {
+		fmt.Fprint(&schemeNames, "const (\n")
+		for _, scheme := range schemeOrder {
+			fmt.Fprintf(&schemeNames, "\t%s = %q\n", schemeConstants[scheme], scheme)
+		}
+		fmt.Fprint(&schemeNames, ")\n\n")
 	}
 
 	var methods bytes.Buffer
@@ -220,15 +246,16 @@ func generate(cfg config) ([]byte, error) {
 			if security.roles {
 				roles = "credentials.Roles"
 			}
+			schemeConst := schemeConstants[security.scheme]
 			switch security.kind {
 			case apiKeyKind:
-				fmt.Fprintf(&methods, "return s.authorizeAPIKey(ctx, %q, credentials.APIKey, %s)\n}\n\n", security.scheme, roles)
+				fmt.Fprintf(&methods, "return s.authorizeAPIKey(ctx, %s, credentials.APIKey, %s)\n}\n\n", schemeConst, roles)
 			case basicAuthKind:
-				fmt.Fprintf(&methods, "return s.authorizeBasicAuth(ctx, %q, credentials.Username, credentials.Password, %s)\n}\n\n", security.scheme, roles)
+				fmt.Fprintf(&methods, "return s.authorizeBasicAuth(ctx, %s, credentials.Username, credentials.Password, %s)\n}\n\n", schemeConst, roles)
 			case bearerAuthKind:
-				fmt.Fprintf(&methods, "return s.authorizeBearerAuth(ctx, %q, credentials.Token, %s)\n}\n\n", security.scheme, roles)
+				fmt.Fprintf(&methods, "return s.authorizeBearerAuth(ctx, %s, credentials.Token, %s)\n}\n\n", schemeConst, roles)
 			case oauth2Kind:
-				fmt.Fprintf(&methods, "return s.authorizeOAuth2(ctx, %q, credentials.Token, credentials.Scopes)\n}\n\n", security.scheme)
+				fmt.Fprintf(&methods, "return s.authorizeOAuth2(ctx, %s, credentials.Token, credentials.Scopes)\n}\n\n", schemeConst)
 			}
 		}
 	}
@@ -244,6 +271,7 @@ func generate(cfg config) ([]byte, error) {
 		fmt.Fprintf(&out, "\t%s %q\n", alias, q.imports[alias])
 	}
 	fmt.Fprint(&out, ")\n\n")
+	out.Write(schemeNames.Bytes())
 	out.Write(support)
 	fmt.Fprintf(&out, "// %s implements %s.SecurityHandler. Unsupported schemes remain stubs.\n", handlerTypeName, q.apiAlias)
 	fmt.Fprintf(&out, "type %s struct {\n", handlerTypeName)

@@ -13,6 +13,10 @@ import (
 	time "time"
 )
 
+const (
+	WidgetKeyScheme = "WidgetKey"
+)
+
 // APIKeyStore finds credentials within a scheme's namespace using a SHA-256 digest.
 // scheme is the Go credential type name, for example ApiKeyHeaderA3nKs.
 // Implementations must return ErrInvalidAPIKey for an unknown key and must be
@@ -97,5 +101,5 @@ var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetKey implements api.SecurityHandler.
 func (s *handler) HandleWidgetKey(ctx context.Context, _ api.OperationName, credentials api.WidgetKey) (context.Context, error) {
-	return s.authorizeAPIKey(ctx, "WidgetKey", credentials.APIKey, credentials.Roles)
+	return s.authorizeAPIKey(ctx, WidgetKeyScheme, credentials.APIKey, credentials.Roles)
 }

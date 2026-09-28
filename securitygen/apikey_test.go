@@ -101,7 +101,16 @@ func TestGenerateAPIKeyDetection(t *testing.T) {
 				if !bytes.Contains(code, []byte("func NewHandler(apiKeys APIKeyStore)")) {
 					t.Fatal("constructor is missing the API key dependency")
 				}
-				if !bytes.Contains(code, []byte(`s.authorizeAPIKey(ctx, "CustomSecret", credentials.APIKey,`)) {
+				for _, want := range []string{
+					`const (`,
+					`CustomSecretScheme = "CustomSecret"`,
+					`s.authorizeAPIKey(ctx, CustomSecretScheme, credentials.APIKey,`,
+				} {
+					if !bytes.Contains(code, []byte(want)) {
+						t.Fatalf("missing %q", want)
+					}
+				}
+				if !bytes.Contains(code, []byte(`s.authorizeAPIKey(ctx, CustomSecretScheme, credentials.APIKey,`)) {
 					t.Fatal("API key method does not delegate to the shared implementation")
 				}
 			} else if bytes.Contains(code, []byte("apiKeys APIKeyStore")) {

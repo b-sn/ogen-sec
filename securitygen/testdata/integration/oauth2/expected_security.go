@@ -11,6 +11,10 @@ import (
 	time "time"
 )
 
+const (
+	WidgetOAuthScheme = "WidgetOAuth"
+)
+
 // OAuth2TokenVerifier authenticates an access token for this resource server.
 // scheme is the Go credential type name, not the operation name. Return
 // ErrInvalidOAuth2Token for invalid or unknown tokens. Return only verified
@@ -109,5 +113,5 @@ var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetOAuth implements api.SecurityHandler.
 func (s *handler) HandleWidgetOAuth(ctx context.Context, _ api.OperationName, credentials api.WidgetOAuth) (context.Context, error) {
-	return s.authorizeOAuth2(ctx, "WidgetOAuth", credentials.Token, credentials.Scopes)
+	return s.authorizeOAuth2(ctx, WidgetOAuthScheme, credentials.Token, credentials.Scopes)
 }

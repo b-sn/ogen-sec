@@ -100,7 +100,8 @@ func TestGenerateBearerAuthDetection(t *testing.T) {
 			} else {
 				for _, want := range []string{
 					"type BearerTokenVerifier interface", "VerifyBearerToken(ctx context.Context, scheme, token string) (subject string, roles []string, err error)", "func NewHandler(bearerTokens BearerTokenVerifier)",
-					`s.authorizeBearerAuth(ctx, "CredentialXYZ", credentials.Token,`,
+					`CredentialXYZScheme = "CredentialXYZ"`,
+					`s.authorizeBearerAuth(ctx, CredentialXYZScheme, credentials.Token,`,
 				} {
 					if !bytes.Contains(code, []byte(want)) {
 						t.Errorf("missing %q", want)

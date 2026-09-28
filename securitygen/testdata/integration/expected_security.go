@@ -13,6 +13,16 @@ import (
 	time "time"
 )
 
+const (
+	ApiKeyCookieM2xJfScheme         = "ApiKeyCookieM2xJf"
+	ApiKeyHeaderA3nKsScheme         = "ApiKeyHeaderA3nKs"
+	ApiKeyQueryC8rVwScheme          = "ApiKeyQueryC8rVw"
+	BasicAuthF5wJzScheme            = "BasicAuthF5wJz"
+	BearerAuthV6qPtScheme           = "BearerAuthV6qPt"
+	OAuth2N4kXbScheme               = "OAuth2N4kXb"
+	ReferencedBearerAuthZ8yHdScheme = "ReferencedBearerAuthZ8yHd"
+)
+
 // APIKeyStore finds credentials within a scheme's namespace using a SHA-256 digest.
 // scheme is the Go credential type name, for example ApiKeyHeaderA3nKs.
 // Implementations must return ErrInvalidAPIKey for an unknown key and must be
@@ -335,35 +345,35 @@ var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleApiKeyCookieM2xJf implements api.SecurityHandler.
 func (s *handler) HandleApiKeyCookieM2xJf(ctx context.Context, _ api.OperationName, credentials api.ApiKeyCookieM2xJf) (context.Context, error) {
-	return s.authorizeAPIKey(ctx, "ApiKeyCookieM2xJf", credentials.APIKey, credentials.Roles)
+	return s.authorizeAPIKey(ctx, ApiKeyCookieM2xJfScheme, credentials.APIKey, credentials.Roles)
 }
 
 // HandleApiKeyHeaderA3nKs implements api.SecurityHandler.
 func (s *handler) HandleApiKeyHeaderA3nKs(ctx context.Context, _ api.OperationName, credentials api.ApiKeyHeaderA3nKs) (context.Context, error) {
-	return s.authorizeAPIKey(ctx, "ApiKeyHeaderA3nKs", credentials.APIKey, credentials.Roles)
+	return s.authorizeAPIKey(ctx, ApiKeyHeaderA3nKsScheme, credentials.APIKey, credentials.Roles)
 }
 
 // HandleApiKeyQueryC8rVw implements api.SecurityHandler.
 func (s *handler) HandleApiKeyQueryC8rVw(ctx context.Context, _ api.OperationName, credentials api.ApiKeyQueryC8rVw) (context.Context, error) {
-	return s.authorizeAPIKey(ctx, "ApiKeyQueryC8rVw", credentials.APIKey, credentials.Roles)
+	return s.authorizeAPIKey(ctx, ApiKeyQueryC8rVwScheme, credentials.APIKey, credentials.Roles)
 }
 
 // HandleBasicAuthF5wJz implements api.SecurityHandler.
 func (s *handler) HandleBasicAuthF5wJz(ctx context.Context, _ api.OperationName, credentials api.BasicAuthF5wJz) (context.Context, error) {
-	return s.authorizeBasicAuth(ctx, "BasicAuthF5wJz", credentials.Username, credentials.Password, credentials.Roles)
+	return s.authorizeBasicAuth(ctx, BasicAuthF5wJzScheme, credentials.Username, credentials.Password, credentials.Roles)
 }
 
 // HandleBearerAuthV6qPt implements api.SecurityHandler.
 func (s *handler) HandleBearerAuthV6qPt(ctx context.Context, _ api.OperationName, credentials api.BearerAuthV6qPt) (context.Context, error) {
-	return s.authorizeBearerAuth(ctx, "BearerAuthV6qPt", credentials.Token, credentials.Roles)
+	return s.authorizeBearerAuth(ctx, BearerAuthV6qPtScheme, credentials.Token, credentials.Roles)
 }
 
 // HandleOAuth2N4kXb implements api.SecurityHandler.
 func (s *handler) HandleOAuth2N4kXb(ctx context.Context, _ api.OperationName, credentials api.OAuth2N4kXb) (context.Context, error) {
-	return s.authorizeOAuth2(ctx, "OAuth2N4kXb", credentials.Token, credentials.Scopes)
+	return s.authorizeOAuth2(ctx, OAuth2N4kXbScheme, credentials.Token, credentials.Scopes)
 }
 
 // HandleReferencedBearerAuthZ8yHd implements api.SecurityHandler.
 func (s *handler) HandleReferencedBearerAuthZ8yHd(ctx context.Context, _ api.OperationName, credentials api.ReferencedBearerAuthZ8yHd) (context.Context, error) {
-	return s.authorizeBearerAuth(ctx, "ReferencedBearerAuthZ8yHd", credentials.Token, credentials.Roles)
+	return s.authorizeBearerAuth(ctx, ReferencedBearerAuthZ8yHdScheme, credentials.Token, credentials.Roles)
 }

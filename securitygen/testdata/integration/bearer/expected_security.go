@@ -10,6 +10,10 @@ import (
 	slices "slices"
 )
 
+const (
+	WidgetBearerScheme = "WidgetBearer"
+)
+
 // BearerTokenVerifier authenticates a token within a scheme's trust boundary.
 // scheme is the Go credential type name, not the operation name. Return
 // ErrInvalidBearerToken for invalid or unknown tokens, including inactive,
@@ -82,5 +86,5 @@ var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetBearer implements api.SecurityHandler.
 func (s *handler) HandleWidgetBearer(ctx context.Context, _ api.OperationName, credentials api.WidgetBearer) (context.Context, error) {
-	return s.authorizeBearerAuth(ctx, "WidgetBearer", credentials.Token, credentials.Roles)
+	return s.authorizeBearerAuth(ctx, WidgetBearerScheme, credentials.Token, credentials.Roles)
 }

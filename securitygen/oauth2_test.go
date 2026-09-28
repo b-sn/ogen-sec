@@ -113,7 +113,8 @@ func TestGenerateOAuth2Detection(t *testing.T) {
 			} else {
 				for _, want := range []string{
 					"type OAuth2TokenVerifier interface", "func NewHandler(oauth2Tokens OAuth2TokenVerifier)",
-					`s.authorizeOAuth2(ctx, "CredentialXYZ", credentials.Token, credentials.Scopes)`,
+					`CredentialXYZScheme = "CredentialXYZ"`,
+					`s.authorizeOAuth2(ctx, CredentialXYZScheme, credentials.Token, credentials.Scopes)`,
 				} {
 					if !bytes.Contains(code, []byte(want)) {
 						t.Errorf("missing %q", want)

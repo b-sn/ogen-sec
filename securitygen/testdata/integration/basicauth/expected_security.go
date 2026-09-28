@@ -11,6 +11,10 @@ import (
 	time "time"
 )
 
+const (
+	WidgetLoginScheme = "WidgetLogin"
+)
+
 // BasicAuthStore finds a user within a scheme's namespace by username.
 // scheme is the Go credential type name. Implementations must return
 // ErrInvalidBasicAuth for an unknown user and be safe for concurrent use.
@@ -118,5 +122,5 @@ var _ api.SecurityHandler = (*handler)(nil)
 
 // HandleWidgetLogin implements api.SecurityHandler.
 func (s *handler) HandleWidgetLogin(ctx context.Context, _ api.OperationName, credentials api.WidgetLogin) (context.Context, error) {
-	return s.authorizeBasicAuth(ctx, "WidgetLogin", credentials.Username, credentials.Password, credentials.Roles)
+	return s.authorizeBasicAuth(ctx, WidgetLoginScheme, credentials.Username, credentials.Password, credentials.Roles)
 }
